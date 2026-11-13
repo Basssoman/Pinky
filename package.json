@@ -1,0 +1,15 @@
+{
+  "name": "pinky",
+  "private": true,
+  "description": "Pinky: private escrow deals for freelance creators on NEAR. Root scripts only; the parts live in contract/, server/ and web/.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "verify": "node verify/verify.mjs",
+    "verify:mainnet": "node verify/verify.mjs --skip-sandbox",
+    "verify:sandbox": "node verify/verify.mjs --skip-mainnet"
+  }
+}

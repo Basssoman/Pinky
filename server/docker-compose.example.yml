@@ -1,0 +1,29 @@
+# Example for running the Pinky API with docker compose (e.g. on a self-hosted PaaS).
+# Run from the server/ folder:  docker compose -f docker-compose.example.yml up -d --build
+#
+# ./data on the host must contain (copied separately, NEVER in git):
+#   server.env      keys and settings (TELEGRAM_BOT_TOKEN, NEARAI_API_KEY, RELAYER_PRIVATE_KEY, ...)
+#   escrow.sqlite   the live database (deals, profiles, orders)
+#
+# Rules:
+# - Exactly ONE instance at a time: the Telegram bot uses long polling, and the
+#   relayer signs NEAR transactions in order. Do not scale to 2+ replicas.
+# - Behind a reverse proxy (Traefik, nginx, ...): TRUST_PROXY=1, otherwise every
+#   visitor looks like the proxy's IP and rate limits hit everyone together.
+# - CORS_ORIGIN = the site address, so only our site can call the API.
+# - Health: GET /api/health (port 8787).
+services:
+  pinky-api:
+    build: .
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      ENV_FILE: /data/server.env
+      DB_PATH: /data/escrow.sqlite
+      TRUST_PROXY: "1"
+      CORS_ORIGIN: https://pinkydeals.pages.dev
+    volumes:
+      - ./data:/data
+    expose:
+      - "8787"

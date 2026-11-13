@@ -1,0 +1,1397 @@
+/* The home page (Landing.tsx). Pixel look approved 11-12.
+   Colors and fonts come from tokens.css. Sections: base, bands + squares +
+   edges, blocks (.lp-*), motion. */
+
+/* ================================================================ base */
+.lp {
+  display: grid;
+  gap: 96px;
+  padding: 32px 0 24px;
+}
+.lp h1,
+.lp h2,
+.lp p,
+.lp dl,
+.lp dd,
+.lp ol,
+.lp ul,
+.lp figure {
+  margin: 0;
+}
+.lp ol,
+.lp ul {
+  padding: 0;
+  list-style: none;
+}
+.lp h1,
+.lp h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-wrap: balance;
+}
+.lp-lead {
+  margin-top: 20px !important;
+  max-width: 52ch;
+  font-size: 1.0625rem;
+  color: var(--ink-soft);
+}
+.lp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+.lp .cta {
+  margin-top: 0;
+}
+.bitmap {
+  display: block;
+}
+.px-on {
+  fill: var(--px, currentColor);
+}
+.px-acc {
+  fill: var(--px-acc, currentColor);
+}
+@keyframes px-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (max-width: 520px) {
+  .lp {
+    gap: 72px;
+  }
+  .lp-actions .cta,
+.lp-actions .btn-ghost {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+}
+
+/* ================================================================ bands, squares, edges
+   Black and white bands, faint small squares behind the whole page (two
+   layers, parallax), dithered pixel edges driven by scroll position.
+   Headings in a wide pixel caps face (Press Start 2P). */
+/* header and footer sit above the squares layer; the header also sits above
+   the bands (z 2), so its language menu can be clicked */
+.page-bleed .top,
+.page-bleed .foot {
+  position: relative;
+  z-index: 2;
+}
+.page-bleed .top {
+  z-index: 3;
+}
+.lp {
+  gap: 0;
+  padding: 0;
+}
+.band {
+  position: relative;
+  background: #121212;
+  color: var(--ink);
+}
+.band-light {
+  background: #f2f2f2;
+  --ink: #121212;
+  --ink-soft: #474747;
+  --ink-faint: #5e5e5e;
+  --line: #cfcfcf;
+  --vault: #121212;
+  --vault-press: #333333;
+  --on-vault: #ffffff;
+  --rail: #121212;
+  --focus: #121212;
+  --blue: #1e4fd8;
+}
+/* the dithered edge: 4 rows up into the band above, 1 row of holes below the line */
+.band-edge {
+  position: absolute;
+  left: 0;
+  top: -56px; /* 4 rows of 14 px (top and height are set again in code) */
+  display: block;
+  width: 100%;
+  height: 70px;
+}
+.band-in {
+  position: relative;
+  z-index: 2;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 120px 20px 128px;
+}
+.band-hero .band-in {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 80px);
+  padding-top: 64px;
+  padding-bottom: 96px;
+}
+.field-hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+.lp-tag {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  line-height: 1.6;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.lp h1 {
+  margin-top: 22px !important;
+  font-size: clamp(1.7rem, 4.6vw, 3.7rem);
+  line-height: 1.22;
+  text-transform: uppercase;
+  max-width: 16ch;
+}
+.lp .lp-lead {
+  margin-top: 28px !important;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+.lp .field-hero .lp-actions {
+  justify-content: center;
+}
+@media (max-width: 600px) {
+  .band-in {
+    padding: 88px 20px 96px;
+  }
+  .band-edge {
+    top: -40px; /* 4 rows of 10 px */
+    height: 50px;
+  }
+  .band-hero .band-in {
+    min-height: calc(100svh - 72px);
+  }
+}
+
+/* ================================================================ blocks */
+
+/* ---------------------------------------------------------------- page frame: full bleed (Shell `bleed`) */
+.page-bleed {
+  max-width: none;
+  padding: 0 0 40px;
+}
+.page-bleed .top {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 18px 20px;
+}
+.page-bleed .foot {
+  max-width: 1120px;
+  margin: 48px auto 0;
+  padding: 20px 20px 0;
+}
+/* header and footer above the squares; the header also above the bands (z 2),
+   so the language menu opens on top and can be clicked */
+.page-bleed .top,
+.page-bleed .foot {
+  position: relative;
+  z-index: 2;
+}
+.page-bleed .top {
+  z-index: 3;
+}
+/* more air inside each block; was 120 / 128 px, phone 88 / 96 */
+.lp .band:not(.band-hero) .band-in {
+  padding: 184px 32px 192px;
+}
+@media (max-width: 600px) {
+  .lp .band:not(.band-hero) .band-in {
+    padding: 128px 20px 136px;
+  }
+}
+.lp .band-light {
+  --px: #121212;
+  --px-acc: #1e4fd8;
+  --px-dim: #a6a6a6;
+}
+.px-dim {
+  fill: var(--px-dim);
+}
+
+/* ---------------------------------------------------------------- shared bits */
+.lp h2 {
+  font-size: clamp(1.05rem, 2.4vw, 1.6rem);
+  line-height: 1.45;
+  text-transform: uppercase;
+  max-width: 24ch;
+}
+.lp h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+.lp .lp-tag + h2 {
+  margin-top: 18px;
+}
+.lp p {
+  margin: 0;
+}
+.lp-chip {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px dashed var(--line);
+  font-family: var(--font-display);
+  font-size: 0.56rem;
+  line-height: 1.5;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.lp-mark {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 4px;
+}
+.px-spark {
+  opacity: 1;
+}
+.band.on .px-spark {
+  animation: lp-blink 3.4s steps(1) infinite;
+}
+@keyframes lp-blink {
+  0%,
+70% {
+    opacity: 1;
+  }
+  71%,
+86% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- 1 hero (centred) */
+.lp .lp-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  text-align: center;
+}
+.lp-hero-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lp .lp-hero h1 {
+  margin: 22px auto 0 !important;
+  max-width: 20ch;
+  font-size: clamp(1.6rem, 3.6vw, 3rem);
+  line-height: 1.28;
+  text-transform: uppercase;
+}
+.lp .lp-hero .lp-lead {
+  margin: 28px auto 0 !important;
+  max-width: 60ch;
+  text-align: center;
+}
+.lp .lp-hero .lp-actions,
+.lp .lp-hero .lp-proof {
+  justify-content: center;
+}
+.lp .lp-hero .lp-client-note {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+.lp-pinkies {
+  grid-area: art;
+  width: 100%;
+  max-width: 500px;
+  justify-self: end;
+}
+.lp-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 26px !important;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.lp-proof li::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 9px;
+  background: var(--blue);
+  vertical-align: 2px;
+}
+.lp-client-note {
+  grid-area: note;
+  margin-top: 36px !important;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 0.9375rem;
+  max-width: 52ch;
+}
+
+/* ---------------------------------------------------------------- 2 flow (diagram) */
+.lp-flow-map {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr minmax(60px, 0.9fr) 1fr minmax(60px, 0.9fr) 1fr;
+  align-items: start;
+  margin-top: 56px;
+  padding: 48px 28px 28px;
+  border: 1px solid var(--line);
+}
+.lp-flow-map > .lp-chip {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  border-style: solid;
+  background: var(--ink);
+  color: #f2f2f2;
+  border-color: var(--ink);
+}
+.lp-node {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.lp-node-art {
+  width: 84px;
+  height: auto;
+  margin-bottom: 10px;
+}
+.lp-node strong {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+.lp-node span {
+  max-width: 22ch;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.lp-node-safe .lp-node-art {
+  width: 100px;
+}
+/* the track: a dotted pixel rail with three coins hopping along it */
+.lp-track {
+  position: relative;
+  height: 12px;
+  margin-top: 38px;
+  background: repeating-linear-gradient(90deg, var(--ink-faint) 0 4px, transparent 4px 12px) center / 100% 4px no-repeat;
+}
+.lp-track i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--blue);
+  opacity: 0;
+}
+.band.on .lp-track i {
+  animation: lp-hop 2.4s steps(10, end) infinite;
+}
+.lp-track i:nth-child(2) {
+  animation-delay: 0.8s !important;
+}
+.lp-track i:nth-child(3) {
+  animation-delay: 1.6s !important;
+}
+@keyframes lp-hop {
+  0% {
+    left: 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 12px);
+    opacity: 0;
+  }
+}
+.lp-back {
+  grid-column: 1 / 4;
+  display: flex;
+  gap: 10px;
+  margin-top: 36px !important;
+  padding-top: 14px;
+  border-top: 2px dashed var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.lp-back .lp-mark {
+  --px: var(--ink-faint);
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+}
+
+/* ---------------------------------------------------------------- 3 compare (two panels) */
+.lp-cmp-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 48px;
+}
+.lp-panel {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 36px 36px 40px;
+}
+.lp-panel-no {
+  border: 1px dashed #3a3a3a;
+  border-right: 0;
+  color: var(--ink-soft);
+}
+.lp-panel-yes {
+  background: #f2f2f2;
+  color: #121212;
+  --px: #121212;
+  --px-acc: #1e4fd8;
+  --ink-soft: #474747;
+  transform: translateY(-20px);
+  box-shadow: 10px 10px 0 #2b2b2b;
+}
+.lp-panel-art {
+  width: 64px;
+  height: auto;
+}
+.lp-panel h3 {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+.lp-panel ul {
+  display: grid;
+  gap: 14px;
+}
+.lp-panel li {
+  display: flex;
+  gap: 12px;
+  font-size: 1rem;
+}
+.lp-panel-no .lp-mark {
+  --px: #6a6a6a;
+}
+.lp-panel-yes .lp-mark {
+  --px: #1e4fd8;
+}
+
+/* ---------------------------------------------------------------- 4 how (zig-zag) */
+.lp-how ol {
+  display: grid;
+  gap: 32px;
+  margin-top: 56px !important;
+}
+.lp-step {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 56px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.lp-step:nth-child(even) .lp-step-text {
+  order: 2;
+}
+.lp-step-text {
+  display: grid;
+  gap: 10px;
+  max-width: 46ch;
+}
+.lp-step-n {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 1.2;
+  color: var(--blue);
+}
+.lp-step-text p {
+  color: var(--ink-soft);
+}
+/* the little screens: white cards with a hard pixel shadow */
+.lp-screen {
+  display: grid;
+  gap: 14px;
+  justify-self: center;
+  width: min(100%, 360px);
+  padding: 22px;
+  background: #fff;
+  border: 2px solid #121212;
+  box-shadow: 8px 8px 0 #121212;
+  font-size: 0.9375rem;
+}
+.lp-screen b {
+  font-weight: 600;
+}
+.lp-screen em {
+  font-style: normal;
+  color: var(--ink-soft);
+}
+.lp-bars {
+  display: grid;
+  gap: 7px;
+}
+.lp-bars i,
+.lp-bubble i {
+  display: block;
+  height: 8px;
+  background: #dcdcdc;
+}
+.lp-screen-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lp-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 2px solid #1e4fd8;
+  color: #1e4fd8;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+.lp-seal {
+  width: 21px;
+  height: 21px;
+}
+.lp-bubble {
+  display: block;
+  max-width: 78%;
+  padding: 10px 12px;
+  background: #ececec;
+}
+.lp-bubble-out {
+  justify-self: end;
+  background: #121212;
+  color: #fff;
+}
+.lp-bubble code {
+  font-size: 0.8125rem;
+}
+.lp-ok {
+  display: inline-flex;
+  gap: 8px;
+  color: #1e4fd8;
+  font-weight: 600;
+}
+.lp-ok .lp-mark {
+  margin-top: 3px;
+}
+.lp-screen-art {
+  width: 52px;
+  height: auto;
+}
+.lp-fill {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+}
+.lp-fill i {
+  height: 12px;
+  background: #1e4fd8;
+}
+.band.on .lp-fill i {
+  animation: lp-fillin 2.8s steps(1) infinite;
+}
+@keyframes lp-fillin {
+  0% {
+    background: #dcdcdc;
+  }
+  35%,
+100% {
+    background: #1e4fd8;
+  }
+}
+
+/* ---------------------------------------------------------------- 5 what if (bento) */
+.lp-wi-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: end;
+  gap: 24px 56px;
+}
+.lp .lp-wi-head h2 {
+  font-size: clamp(1.6rem, 4vw, 2.8rem);
+}
+.lp .lp-wi-head .lp-lead {
+  margin: 0 !important;
+}
+.lp-wi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 48px;
+}
+.lp-case {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 12px;
+  padding: 26px;
+  border: 1px solid #333;
+  background: #171717;
+}
+.lp-case-1,
+.lp-case-4 {
+  grid-column: span 2;
+}
+.lp-case-art {
+  width: 56px;
+  height: auto;
+  margin-bottom: 8px;
+}
+.lp-case p {
+  color: var(--ink-soft);
+  max-width: 52ch;
+}
+.lp-out {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px dashed #333;
+}
+.lp-out > span:last-child {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+.lp-meter {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 3px;
+  max-width: 320px;
+}
+.lp-meter span {
+  height: 10px;
+  background: #2e2e2e;
+}
+.lp-meter .c,
+.lp-legend .c {
+  background: var(--blue);
+}
+.lp-meter .k,
+.lp-legend .k {
+  background: #fff;
+}
+.lp-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px !important;
+  color: var(--ink-faint);
+  font-size: 0.875rem;
+}
+.lp-legend span {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+}
+.lp-legend .k {
+  margin-left: 14px;
+}
+
+/* ---------------------------------------------------------------- 6 coins (funnel) */
+.lp-coins {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 40px 64px;
+  align-items: center;
+}
+.lp-coins-out {
+  margin-top: 18px !important;
+  font-weight: 600;
+}
+.lp-funnel {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  justify-content: start;
+  align-items: center;
+  gap: 20px;
+}
+.lp-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 72px);
+  gap: 10px;
+}
+.lp-tiles li {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 2px solid #121212;
+  background: #fff;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  color: #121212;
+}
+.lp-tiles li:nth-child(even) {
+  transform: translateY(10px);
+}
+.band.on .lp-tiles li {
+  animation: lp-bump 3.15s steps(1) infinite;
+}
+@keyframes lp-bump {
+  0%,
+12% {
+    background: #1e4fd8;
+    color: #fff;
+    border-color: #1e4fd8;
+  }
+  13%,
+100% {
+    background: #fff;
+    color: #121212;
+    border-color: #121212;
+  }
+}
+.lp-arrow {
+  display: flex;
+  gap: 4px;
+}
+.lp-arrow i {
+  width: 10px;
+  height: 10px;
+  background: #121212;
+}
+.lp-arrow i:nth-child(2) {
+  opacity: 0.6;
+}
+.lp-arrow i:nth-child(1) {
+  opacity: 0.3;
+}
+.lp-usdc {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  width: 150px;
+  aspect-ratio: 1;
+  padding: 12px;
+  background: #121212;
+  color: #fff;
+  box-shadow: 8px 8px 0 #1e4fd8;
+  text-align: center;
+  align-content: center;
+}
+.lp-usdc b {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 400;
+}
+.lp-usdc span {
+  font-size: 0.8125rem;
+  color: #bdbdbd;
+}
+/* Two columns but a narrow right one (901-1200 px, e.g. a 1024 px laptop): the
+   funnel (4 coin tiles + arrow + USDC tile, ~554 px) shrinks instead of pushing
+   the page sideways. The 8 px on the right is the USDC tile's shadow. */
+@media (min-width: 901px) and (max-width: 1200px) {
+  .lp-funnel {
+    grid-template-columns: minmax(0, 318px) auto 120px;
+    gap: 14px;
+    padding-right: 8px;
+  }
+  .lp-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .lp-usdc {
+    width: 120px;
+  }
+}
+.lp-nets {
+  grid-column: 1 / -1;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  line-height: 1.8;
+}
+.lp-nets span {
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------- 7 trust (statement + ledger) */
+.lp .lp-trust h2 {
+  max-width: 18ch;
+  font-size: clamp(1.5rem, 4vw, 2.8rem);
+  line-height: 1.3;
+}
+.lp-trust-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 64px;
+  align-items: start;
+  margin-top: 56px;
+}
+.lp-doc {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+.lp-ledger > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px 32px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+.lp-ledger dt {
+  display: flex;
+  gap: 14px;
+  font-weight: 600;
+}
+.lp-ledger dt span {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  line-height: 2.2;
+  color: var(--blue);
+}
+.lp-ledger dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+.lp-honest {
+  margin-top: 8px !important;
+  padding: 16px 18px;
+  border-left: 6px solid var(--blue);
+  background: #1a1a1a;
+}
+
+/* ---------------------------------------------------------------- 8 fees (3% + receipt) */
+.lp-fees {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 64px;
+  align-items: center;
+}
+.lp-pct {
+  width: min(100%, 300px);
+  height: auto;
+  margin-bottom: 36px;
+}
+.lp-receipt {
+  justify-self: center;
+  width: min(100%, 400px);
+  padding: 28px 28px 40px;
+  background: #fff;
+  border: 2px solid #121212;
+  border-bottom: 0;
+  /* a stepped (pixel) torn bottom edge */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 95% calc(100% - 10px), 90% 100%, 85% calc(100% - 10px), 80% 100%, 75% calc(100% - 10px), 70% 100%, 65% calc(100% - 10px), 60% 100%, 55% calc(100% - 10px), 50% 100%, 45% calc(100% - 10px), 40% 100%, 35% calc(100% - 10px), 30% 100%, 25% calc(100% - 10px), 20% 100%, 15% calc(100% - 10px), 10% 100%, 5% calc(100% - 10px), 0 100%);
+  transform: rotate(-1.5deg);
+}
+.lp-receipt figcaption {
+  padding-bottom: 14px;
+  border-bottom: 2px dashed #121212;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+.lp-receipt dl {
+  display: grid;
+  margin: 8px 0 18px;
+}
+.lp-receipt dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px dotted #9a9a9a;
+}
+.lp-receipt dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  line-height: 1.9;
+  white-space: nowrap;
+}
+.lp-receipt .total {
+  border-bottom: 2px solid #121212;
+  font-weight: 600;
+}
+.lp-receipt .total dd {
+  color: #1e4fd8;
+}
+.lp-receipt p {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+.lp-receipt-no {
+  margin-top: 10px !important;
+  font-weight: 600;
+  color: #121212 !important;
+}
+
+/* ---------------------------------------------------------------- 9 FAQ (sticky side + accordion) */
+.lp-faq {
+  display: grid;
+  grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.4fr);
+  gap: 64px;
+  align-items: start;
+}
+.lp-faq-side {
+  position: sticky;
+  top: 96px;
+  display: grid;
+  gap: 28px;
+}
+.lp-q {
+  width: 96px;
+  height: auto;
+}
+.lp .lp-faq h2 {
+  font-size: clamp(1.4rem, 3.4vw, 2.4rem);
+}
+.lp-faq-list details {
+  border-top: 1px solid var(--line);
+}
+.lp-faq-list details:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.lp-faq-list summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1.0625rem;
+  list-style: none;
+}
+.lp-faq-list summary::-webkit-details-marker {
+  display: none;
+}
+.lp-faq-list summary::after {
+  content: '+';
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  color: var(--blue);
+}
+.lp-faq-list details[open] summary::after {
+  content: '−';
+}
+.lp-faq-list summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.lp-faq-list details p {
+  padding: 0 0 24px;
+  max-width: 62ch;
+  color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------------------- 10 end (centered) */
+.lp-end {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+.lp-end > * {
+  grid-area: auto; /* not the hero's named areas */
+}
+.lp-pinkies-end {
+  width: 220px;
+  justify-self: center;
+  margin-bottom: 40px;
+}
+.lp .lp-end h2 {
+  max-width: 20ch;
+  font-size: clamp(1.4rem, 3.6vw, 2.6rem);
+  line-height: 1.35;
+}
+.lp .lp-end .lp-lead {
+  margin: 24px auto 0 !important;
+}
+.lp-end .lp-actions {
+  justify-content: center;
+}
+.lp-end .lp-client-note {
+  border-top: 0;
+  margin-top: 20px !important;
+  padding-top: 0;
+}
+
+/* ---------------------------------------------------------------- tablet and phone */
+@media (max-width: 900px) {
+  .lp-hero,
+.lp-coins,
+.lp-fees,
+.lp-trust-body,
+.lp-faq {
+    grid-template-columns: 1fr;
+  }
+  .lp .lp-hero {
+    row-gap: 40px;
+  }
+  .lp-pinkies {
+    justify-self: start;
+    max-width: 380px;
+  }
+  .lp-client-note {
+    margin-top: 0 !important;
+  }
+  .lp-faq-side {
+    position: static;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+  }
+  .lp-q {
+    width: 56px;
+  }
+  .lp-doc {
+    max-width: 160px;
+  }
+  .lp-trust-body {
+    gap: 40px;
+  }
+  .lp-wi-head {
+    grid-template-columns: 1fr;
+  }
+  .lp-fees {
+    gap: 48px;
+  }
+}
+@media (max-width: 700px) {
+  /* the flow turns vertical: nodes stacked, the coins drop down */
+  .lp-flow-map {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 56px 20px 24px;
+  }
+  .lp-track {
+    width: 12px;
+    height: 64px;
+    margin: 14px 0;
+    background: repeating-linear-gradient(180deg, var(--ink-faint) 0 4px, transparent 4px 12px) center / 4px 100% no-repeat;
+  }
+  .band.on .lp-track i {
+    animation-name: lp-drop;
+  }
+  .lp-back {
+    grid-column: 1;
+    justify-self: stretch;
+  }
+  .lp-cmp-panels {
+    grid-template-columns: 1fr;
+  }
+  .lp-panel-no {
+    border-right: 1px dashed #3a3a3a;
+    border-bottom: 0;
+  }
+  .lp-panel-yes {
+    transform: none;
+    box-shadow: 6px 6px 0 #2b2b2b;
+  }
+  .lp-panel {
+    padding: 28px 22px 30px;
+  }
+  .lp-step {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .lp-step:nth-child(even) .lp-step-text {
+    order: 0;
+  }
+  .lp-wi-grid {
+    grid-template-columns: 1fr;
+  }
+  .lp-case-1,
+.lp-case-4 {
+    grid-column: auto;
+  }
+  .lp-funnel {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .lp-tiles {
+    grid-template-columns: repeat(4, 64px);
+  }
+  .lp-arrow {
+    transform: rotate(90deg);
+  }
+  .lp-ledger > div {
+    grid-template-columns: 1fr;
+  }
+}
+@keyframes lp-drop {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 12px);
+    opacity: 0;
+  }
+}
+@media (max-width: 520px) {
+  .lp-proof {
+    gap: 8px 16px;
+    font-size: 0.875rem;
+  }
+  .lp-case {
+    padding: 22px 20px;
+  }
+  .lp-receipt {
+    padding: 22px 20px 36px;
+  }
+}
+
+/* ---------------------------------------------------------------- reduced motion: everything still */
+@media (prefers-reduced-motion: reduce) {
+  .band.on .px-spark,
+.band.on .lp-track i,
+.band.on .lp-fill i,
+.band.on .lp-tiles li {
+    animation: none;
+  }
+  .lp-track i:first-child {
+    opacity: 1;
+    left: 45%;
+  }
+}
+
+/* ---------------------------------------------------------------- squares, cursor lines, parallax art */
+/* (6) the picture made of squares behind a block: above the band color,
+   under the content (.band-in is z 2) */
+.lp-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+/* (3) no pinky-hands art on phones */
+@media (max-width: 600px) {
+  .lp-pinkies {
+    display: none;
+  }
+}
+/* (4) FAQ: buttons instead of <details>, one open at a time */
+.lp-faq-item {
+  border-top: 1px solid var(--line);
+}
+.lp-faq-item:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.lp-faq-item h3 {
+  margin: 0;
+}
+.lp-faq-item button {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 22px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  font-size: 1.0625rem;
+  text-align: left;
+  cursor: pointer;
+}
+.lp-faq-item button::after {
+  content: '+';
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  color: var(--blue);
+}
+.lp-faq-item.open button::after {
+  content: '-';
+}
+.lp-faq-item button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.lp-faq-item [role='region'] p {
+  padding: 0 0 24px;
+  max-width: 62ch;
+  color: var(--ink-soft);
+}
+/* (5) privacy, under the trust ledger */
+.lp-private {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 18px 18px 20px;
+  border: 1px dashed #4a4a4a;
+}
+.lp-private h3 {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+.lp-private p {
+  color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------------------- copy v1: new blocks and tone swaps */
+/* 2 why: the fears under the two people, the fix across the whole map */
+.lp-fear {
+  position: relative;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  color: var(--ink) !important;
+  font-size: 0.9375rem;
+  max-width: 26ch !important;
+}
+.lp-fear::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: calc(50% - 6px);
+  width: 12px;
+  height: 6px;
+  background: var(--ink);
+}
+.lp-fix {
+  grid-column: 1 / -1 !important;
+  color: var(--ink) !important;
+  font-weight: 600;
+  font-size: 1.0625rem !important;
+}
+.lp-fix .lp-mark {
+  --px: var(--blue);
+  width: 15px !important;
+  height: 15px !important;
+  margin-top: 4px !important;
+}
+/* 3 sides: client panel light (first), creator panel outlined */
+.lp-panel-side {
+  border: 2px solid #f2f2f2;
+  border-left: 0;
+  color: var(--ink);
+  transform: translateY(20px);
+}
+.lp-panel-side .lp-mark {
+  --px: var(--blue);
+}
+.lp-panel-yes {
+  transform: none;
+}
+.lp-panel-hint {
+  margin-top: 6px !important;
+  padding-top: 14px;
+  border-top: 1px dashed #9a9a9a;
+  color: #1e4fd8;
+  font-weight: 600;
+}
+/* 4 how */
+.lp-stamp-plain {
+  justify-self: start;
+  padding: 6px 8px;
+}
+.lp-screen-row-start {
+  justify-content: flex-start;
+}
+/* 6 trust, now on a light band */
+.lp-trust-lead {
+  max-width: 60ch !important;
+}
+/* 7 coins, now on a dark band */
+.band-dark .lp-tiles li {
+  border-color: #f2f2f2;
+}
+.band-dark .lp-arrow i {
+  background: #f2f2f2;
+}
+.band-dark .lp-usdc {
+  border: 2px solid #f2f2f2;
+  box-shadow: 8px 8px 0 #7fb0ff;
+}
+.lp-coins-out {
+  font-weight: 400 !important;
+  color: var(--ink-soft);
+  max-width: 52ch;
+}
+/* 8 fees */
+.lp-fees-client {
+  margin-top: 18px !important;
+  max-width: 52ch;
+  color: var(--ink-soft);
+}
+/* 9 privacy */
+.lp-priv {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 64px;
+  align-items: center;
+}
+.lp-priv-art {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  justify-self: center;
+}
+.lp-priv-public {
+  margin-top: 24px !important;
+  padding: 16px 18px;
+  border-left: 6px solid var(--blue);
+  background: #1a1a1a;
+  color: var(--ink-soft);
+  max-width: 56ch;
+}
+@media (max-width: 900px) {
+  .lp-priv {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .lp-priv-art {
+    max-width: 220px;
+    justify-self: start;
+  }
+}
+@media (max-width: 700px) {
+  .lp-panel-side {
+    border-left: 2px solid #f2f2f2;
+    transform: none;
+  }
+  .lp-fix {
+    grid-column: 1 !important;
+  }
+}
+/* copy v1 fixes: the longer headline, left-aligned leads, the what-if head stacked */
+.lp .lp-hero h1 {
+  max-width: 19ch;
+  font-size: clamp(1.45rem, 3.1vw, 2.55rem);
+}
+.lp .lp-lead {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  text-align: left;
+}
+.lp .lp-end .lp-lead {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  text-align: center;
+}
+.lp-wi-head {
+  grid-template-columns: 1fr;
+}

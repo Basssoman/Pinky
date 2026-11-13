@@ -1,0 +1,58 @@
+{
+  "_note": "Real mainnet transactions of Pinky deals. Every entry is checked read-only by `npm run verify` (archival RPC `tx` method). `sender` is the account that signed the transaction: the relayer (deal-key signatures are inside the args) or the arbiter. Funding arrives as receipts from the USDC token (ft_transfer_call via NEAR Intents / 1Click), not as transactions to the escrow, so it is not listed here; `funded_amount` in `get_deal` shows it.",
+  "contracts": {
+    "9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c": {
+      "kind": "TEST instance (short periods: review 5 min, dispute 15 min, pay-by 3 h; still has 1 full-access key)",
+      "relayer": "f1fb5d0a6d076e2db6d31a765a134cff24fe98a7de15c4b40696b32b879531a5",
+      "arbiter": "bfe910db640bf8f4bf5be3d2b55958147f7d5d779625ca5e64e244683cb56b41",
+      "deals": {
+        "0": "Accepted",
+        "1": { "ArbiterSplit": { "creator_share_bps": 6000 } },
+        "2": { "Settled": { "creator_share_bps": 7000 } },
+        "3": "RefundedByCreator",
+        "4": "Accepted",
+        "5": "Accepted",
+        "7": "RefundedByCreator"
+      },
+      "txs": [
+        { "hash": "3xDGzqVnEHSeeJyJ2QTdDBuvCb4rR789Goyxp5x9pPAj", "sender": "9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c", "method": "new", "deal": null, "action": "deploy + init in one transaction", "date": "2026-11-06" },
+        { "hash": "4vPYvHDUK92sjGJU1WUQbBRmS2tQQpUzuhVXnXeSju2j", "sender": "relayer", "method": "create_deal", "deal": 0, "action": "join", "date": "2026-11-06" },
+        { "hash": "7Py9xhyKcWU6GX42unQyTxEfdKrAPJG6akPLpcbxRBLb", "sender": "relayer", "method": "act", "deal": 0, "action": "deliver", "date": "2026-11-06" },
+        { "hash": "AaAVdpEzkbasViw5S8CWrPyNfDqKyFnfxpxuSE62JNs1", "sender": "relayer", "method": "act", "deal": 0, "action": "accept", "date": "2026-11-06" },
+        { "hash": "91pze9kVnWgXZNJnmQqx8T8F2xgt7jgBjnzUbcgSbXfJ", "sender": "relayer", "method": "act", "deal": 0, "action": "withdraw", "date": "2026-11-06" },
+        { "hash": "Bv7QvExFLTHcygyQn3imwjvnqqe2q9xfEKygiszzxqNs", "sender": "relayer", "method": "create_deal", "deal": 1, "action": "join", "date": "2026-11-06" },
+        { "hash": "GXjnyCCsY1djY8UcnCpMB34ca73HUWnFqN1Ch1E8HDpr", "sender": "relayer", "method": "act", "deal": 1, "action": "deliver", "date": "2026-11-06" },
+        { "hash": "93oM2tMJdPt4mxK7HGnAyUDb6osGTu12mLKd9zyFz7Ns", "sender": "relayer", "method": "act", "deal": 1, "action": "dispute", "date": "2026-11-06" },
+        { "hash": "LX7kzzMKGcS82K9HWkexDcTxM2YDfQQnjtVYZCSdkgC", "sender": "arbiter", "method": "resolve_dispute", "deal": 1, "action": "arbiter 60/40", "date": "2026-11-06" },
+        { "hash": "EE9ppzeknfD8uFYpYGvPKvb13eTvCVDCH9Vg1w2631Kz", "sender": "relayer", "method": "act", "deal": 1, "action": "withdraw", "date": "2026-11-06" },
+        { "hash": "FZGottpC5KS6yKXvD6FSWNegtrDBwnk22h6H54WJyySV", "sender": "relayer", "method": "act", "deal": 1, "action": "withdraw", "date": "2026-11-06" },
+        { "hash": "CtovZ9QT4Y8wXN2n4sEN7fyEyrQn8sNpqYFkiSrqvHur", "sender": "relayer", "method": "create_deal", "deal": 2, "action": "join", "date": "2026-11-06" },
+        { "hash": "GntGRqdGJ4veFzUQvAs8YpBcPL9vJWCeyTVyyq6JTyqa", "sender": "relayer", "method": "settle", "deal": 2, "action": "settle 70/30 (both keys signed)", "date": "2026-11-06" },
+        { "hash": "DuLaNvVQD69X47WCiK2VGNEsspqw2eacLXvpeBEh2aNE", "sender": "relayer", "method": "act", "deal": 2, "action": "withdraw", "date": "2026-11-06" },
+        { "hash": "HMHCfNKKyzTWcBhwZ1Xh2922J6zRS4uiHuPZ2KZaYeFx", "sender": "relayer", "method": "act", "deal": 2, "action": "withdraw", "date": "2026-11-06" },
+        { "hash": "9zuGLNsPKsytngjhAFJjBNExeNvPkTVnfaBsbqi7MdGv", "sender": "relayer", "method": "create_deal", "deal": 3, "action": "join", "date": "2026-11-06" },
+        { "hash": "hnXhmaYFNvFnje9Sbi8mtDcfmvhbNxdmzQDEjme423Y", "sender": "relayer", "method": "act", "deal": 3, "action": "refund", "date": "2026-11-06" },
+        { "hash": "AqH62jXgVgukm3YRUtesWYDVGTTgysXF4pciRqq86VRK", "sender": "relayer", "method": "act", "deal": 3, "action": "withdraw", "date": "2026-11-06" },
+        { "hash": "tRtmVHwvary2sGKr1Di7qcWpTrLJsMHYSXvVmGTQkgz", "sender": "relayer", "method": "create_deal", "deal": 4, "action": "join (through the site)", "date": "2026-11-11" },
+        { "hash": "5PfphXYbDrzthn4ziTwKmn2vaQu5Wkbt8oB6fPjkfssd", "sender": "relayer", "method": "act", "deal": 4, "action": "deliver", "date": "2026-11-11" },
+        { "hash": "612hhRywQtvzzZGotdXZYaLduu7Nw2ptH3cJLozrPxz2", "sender": "relayer", "method": "act", "deal": 4, "action": "accept", "date": "2026-11-11" },
+        { "hash": "DrqCUbE53Gq5XBDfeoDW5vKckcCzugzaAm99smfYrHUS", "sender": "relayer", "method": "act", "deal": 4, "action": "withdraw", "date": "2026-11-11" },
+        { "hash": "3wpLkbCds9PwJ2MNotkudjDDWjtQfysmnU5htg8fCQb1", "sender": "relayer", "method": "create_deal", "deal": 5, "action": "join (through the site)", "date": "2026-11-11" },
+        { "hash": "DhKAfZJEy68f4uqdUfru17tv8bNj6THJ6aDW11wLtTzg", "sender": "relayer", "method": "act", "deal": 5, "action": "deliver", "date": "2026-11-11" },
+        { "hash": "CJKY65mTsPveJ6xf9DJcmiPDvPLxY544EJDu4k9po5PL", "sender": "relayer", "method": "act", "deal": 5, "action": "accept", "date": "2026-11-11" },
+        { "hash": "C2vduSdnrmZW8EAGLH3LAg8W4P7EJ16kKuvC78sBxs6S", "sender": "relayer", "method": "act", "deal": 5, "action": "withdraw", "date": "2026-11-11" },
+        { "hash": "8FoBjEfu7oVUtnu2qPSjS4CPzsyfXewq2pR4aqh7oRUN", "sender": "relayer", "method": "create_deal", "deal": 6, "action": "join (never paid)", "date": "2026-11-11" },
+        { "hash": "CeSv4gW5xVtmU3eTpkZkM2P1sDmEp4WGPdgtNCPRqsG2", "sender": "relayer", "method": "create_deal", "deal": 7, "action": "join (through the site)", "date": "2026-11-11" },
+        { "hash": "FxFT4NfNpsDWioCwTh4qjQEhCfZvRxQQaK49H2SkZMUC", "sender": "relayer", "method": "act", "deal": 7, "action": "refund (by the creator)", "date": "2026-11-11" },
+        { "hash": "7r1GTr3zJ15k6LJ3p2iYTb1MnneSnkXgaNhoyKeJxuVQ", "sender": "relayer", "method": "act", "deal": 7, "action": "withdraw", "date": "2026-11-11" }
+      ]
+    },
+    "FINAL_CONTRACT_ID": {
+      "kind": "FINAL contract (real periods, no full-access keys) — PLACEHOLDER, fill in after the 2026-11-14 deploy",
+      "relayer": "FINAL_RELAYER_ID",
+      "arbiter": "FINAL_ARBITER_ID",
+      "deals": {},
+      "txs": []
+    }
+  }
+}

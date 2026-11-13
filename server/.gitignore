@@ -1,0 +1,8 @@
+# The root .gitignore ignores ".env.*"; the example file has no secrets.
+!.env.example
+.env
+node_modules/
+dist/
+data/
+*.sqlite
+*.sqlite-*

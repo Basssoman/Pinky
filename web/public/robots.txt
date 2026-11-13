@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+# Deal, key and request pages: private links, nothing to index.
+Disallow: /d$
+Disallow: /k$
+Disallow: /p$
+Disallow: /r$
+Disallow: /inbox

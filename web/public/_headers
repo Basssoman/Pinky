@@ -1,0 +1,15 @@
+# Cloudflare Pages response headers.
+# Before a deploy, replace https://api.example.com below with your API origin (VITE_API_URL).
+# No inline scripts anywhere: scripts only from this site. Outside hosts the
+# browser talks to: Google Fonts (styles + font files), our API (also serves
+# profile pictures) and the public NEAR RPCs from src/lib/config.ts. 1Click is
+# called by our server, never by the browser. If the API address or an RPC
+# changes, change it here too.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://api.example.com; connect-src 'self' https://api.example.com https://rpc.mainnet.fastnear.com https://near.drpc.org https://1rpc.io; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+  Strict-Transport-Security: max-age=31536000
+  Permissions-Policy: publickey-credentials-get=(self), publickey-credentials-create=(self), camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()
