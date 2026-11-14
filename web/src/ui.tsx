@@ -1,5 +1,19 @@
 // Small shared UI pieces.
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+
+/**
+ * A step changed inside the same page (pay form → address → "in the safe", key → join → pay…):
+ * start the new step at the top, as a page change does; otherwise a phone keeps the old scroll.
+ * Not on the first render: page changes scroll already.
+ */
+export function useTopOnStep(step: string): void {
+  const last = useRef(step);
+  useEffect(() => {
+    if (last.current === step) return;
+    last.current = step;
+    window.scrollTo(0, 0);
+  }, [step]);
+}
 import { tr, useT, type Dict } from './i18n';
 import { ApiError, type ActCall } from './lib/api';
 import { ChainError } from './lib/chain';

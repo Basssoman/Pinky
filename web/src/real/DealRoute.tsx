@@ -28,7 +28,7 @@ import { KeyStep } from '../KeyStep';
 import { sha256Hex } from '../lib/keys';
 import { isLocked, UnlockScreen } from '../PasskeyProtect';
 import { Steps } from '../Steps';
-import { explain, Notice, useNow, useRun } from '../ui';
+import { explain, Notice, useNow, useRun, useTopOnStep } from '../ui';
 import { getCtx } from './ctx';
 import { dealInfo } from './model';
 import { PayReal } from './PayReal';
@@ -139,6 +139,10 @@ function OpenDeal({ token }: { token: string }) {
   useEffect(() => {
     if (!onlyNotice) document.title = title;
   }, [title, onlyNotice]);
+  // Which screen of the deal is shown: a new one starts at the top.
+  useTopOnStep(
+    d ? `${d.role}|${d.local?.saved ? 'saved' : 'unsaved'}|${d.deal?.state ?? 'none'}|${view}` : 'loading',
+  );
 
   if (error) return problemPage(error);
   if (!d) {

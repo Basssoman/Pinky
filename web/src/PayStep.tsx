@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import { dealDates, fmtDate, usd, type DealInfo } from './deal';
 import { useT } from './i18n';
 import { coinsOn, networksOf, type Coin, type CoinNetwork } from './lib/tokens';
-import { CopyButton, hintFor, Problem, useRun } from './ui';
+import { CopyButton, hintFor, Problem, useRun, useTopOnStep } from './ui';
 
 export type PayStatus = 'waiting' | 'received' | 'converting' | 'done' | 'short' | 'failed' | 'expired';
 
@@ -84,6 +84,8 @@ export function PayStep(props: {
 
   const secondsLeft = quote ? Math.max(0, Math.floor((quote.deadline - now) / 1000)) : 0;
   const shown: PayStatus = quote && props.status === 'waiting' && secondsLeft === 0 ? 'expired' : props.status;
+  // Coin form → payment address → "money is in the safe": each starts at the top.
+  useTopOnStep(props.status === 'done' ? 'done' : quote ? 'address' : 'form');
 
   if (props.status === 'done') return <Done info={info} deliverBy={props.deliverBy ?? null} onOpen={onOpenDeal} />;
 

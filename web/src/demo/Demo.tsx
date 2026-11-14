@@ -15,6 +15,7 @@ import { PRIVATE_BALANCE } from '../lib/tokens';
 import { PayStep, type PayQuoteView, type PayStatus } from '../PayStep';
 import { Steps } from '../Steps';
 import { DEV_PREVIEW } from '../TelegramNotify';
+import { useTopOnStep } from '../ui';
 
 export type DemoStep = 'terms' | 'key' | 'pay' | 'deal' | 'create' | 'keylink';
 export const DEMO_STEPS: DemoStep[] = ['terms', 'key', 'pay', 'deal', 'create', 'keylink'];
@@ -274,6 +275,7 @@ function DemoCreate() {
   const [stage, setStage] = useState<'form' | 'key' | 'share'>('form');
   const [terms, setTerms] = useState<Terms | null>(null);
   const [cancelled, setCancelled] = useState(false);
+  useTopOnStep(stage);
   if (stage === 'form' || !terms) {
     return (
       <CreatePage
