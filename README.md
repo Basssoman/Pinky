@@ -7,7 +7,7 @@ plus a small catalog of creators. Built on NEAR.
 - Judges: start with [VERIFY.md](VERIFY.md) (step-by-step check, real mainnet
   transactions, `npm run verify`).
 - Code: https://github.com/Basssoman/pinky
-- Demo video: coming with the submission
+- Demo video: [watch on X](https://x.com/KraloVirdee112/status/2121636980526322036)
 - Tracks: **realworld**, **privacy**
 - License: [MIT](LICENSE)
 
