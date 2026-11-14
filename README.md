@@ -7,6 +7,9 @@ plus a small catalog of creators. Built on NEAR.
 - Judges: start with [VERIFY.md](VERIFY.md) (step-by-step check, real mainnet
   transactions, `npm run verify`).
 - Code: https://github.com/Basssoman/pinky
+- 2-minute check: open the site, then [VERIFY.md](VERIFY.md) steps 1–3.
+- NEAR is used for: the escrow contract (`escrow.pinkydeals.near`, 0 access
+  keys), NEAR Intents 1Click payments, and the NEAR AI Cloud brief helper.
 - Demo video: [watch on X](https://x.com/KraloVirdee112/status/2121636980526322036)
 - Tracks: **realworld**, **privacy**
 - License: [MIT](LICENSE)
