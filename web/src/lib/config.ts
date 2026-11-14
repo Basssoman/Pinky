@@ -67,8 +67,8 @@ function devNet(): Net | null {
 
 export const NET: Net = devNet() ?? { ...MAINNET, apiBase: String(import.meta.env.VITE_API_URL ?? '') };
 
-/** The one official support contact. "" until the team picks it. */
-export const SUPPORT_CONTACT = '';
+/** The one official support contact: the team on Telegram. */
+export const SUPPORT_CONTACT = '@Bassoman';
 
 export const FEE_BPS = 300;
 export const USDC_DECIMALS = 6;
