@@ -131,8 +131,8 @@ dry (`ONECLICK_FORCE_DRY=true`) unless you set it to `false`.
 
 `escrow.pinkydeals.near` is a reproducible build of this repository at commit
 `912cb4b` (sha256 `6b5193ae…9649`, [VERIFY.md step 6](VERIFY.md#6-rebuild-the-contract-and-compare-it-with-the-chain-510-min-docker)).
-Its deploy key (one full-access key) is still on the account and will be
-deleted; after that nobody, us included, can change the code. Check it any
+Its deploy key was deleted on 2026-11-14 (tx [`GCPjUcna…`](https://nearblocks.io/txns/GCPjUcna7FdwZjv9sAdcNANXw4GRMdbsLPQ7vLyzUiKi)): the account has
+no keys, so nobody, us included, can change the code. Check it any
 time with `view_access_key_list` or `npm run verify:mainnet -- --build none`.
 
 The TEST instance had short timers (review 5 min, dispute 15 min, pay-by 3 h)
@@ -153,7 +153,7 @@ What we protect: the money in a deal, and who is behind a deal.
 | Client | accept, dispute during the review period, refund only after a missed deadline | take the money back early; dispute after the review period |
 | Arbiter (the team) | decide any split of a disputed deal while the dispute period runs | touch a deal nobody disputed; decide after the dispute period; give more than 100% |
 | Contract owner (the team) | rotate the relayer at once; change arbiter / fee account only after a public delay ≥ the dispute period; sweep tokens that belong to no deal; reconcile a stuck withdraw | take deal money, unless it misreports a reconcile of a stuck withdraw (every reconcile is logged with the receipt it claims) |
-| Holder of the contract's deploy key (until it is deleted, see [Mainnet](#mainnet)) | replace the contract code, and with it take everything the escrow holds | nothing; this is why the key gets deleted |
+| Anyone, us included, after the deploy key was deleted (see [Mainnet](#mainnet)) | nothing on the contract account itself: it has no keys | replace the contract code, or take what the escrow holds |
 | Holder of our 1Click API key (operator, or a thief of `.env`) | query 1Click status for our deposit addresses and learn the client's refund wallet and the deal id | move any money |
 
 Every "cannot" in the contract rows is exercised by `npm run verify`
@@ -195,9 +195,8 @@ These are true today.
 - **Outage fallback costs privacy.** If our server is down, a party can send
   its signed action from its own NEAR wallet (~0.1 NEAR), which links that
   wallet to the deal on-chain.
-- **No upgrades, no audit yet.** The contract has no upgrade method. Until
-  its last full-access key (the deploy key) is deleted, whoever holds that key
-  could still replace the code; after the deletion it cannot be changed or
+- **No upgrades, no audit yet.** The contract has no upgrade method and
+  no keys (the deploy key was deleted on 2026-11-14): it cannot be changed or
   patched by anyone, and a fix means a new contract. It has had internal security reviews, not an
   external audit.
 - **The demo API runs on a single small server**; it may be slow

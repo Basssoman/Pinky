@@ -11,9 +11,9 @@ Everything below is read-only. Nothing here signs a transaction or moves money.
 > (mainnet, real USDC, real timers: review ≥ 3 days, dispute 7 days, pay-by
 > 7 days). It was built reproducibly from this repository at commit
 > [`912cb4b`](https://github.com/Basssoman/pinky/tree/912cb4b6a0b7ee8ae8af1e81b900671ab3a2dd22);
-> step 6 rebuilds it byte for byte. Its last full-access key (`EfkwMx…`, the
-> deploy key) is still on the account and will be deleted; until then the
-> "full-access keys" check below prints `FAIL`, and that is the honest answer.
+> step 6 rebuilds it byte for byte. Its deploy key was deleted on
+> 2026-11-14 (tx [`GCPjUcna…`](https://nearblocks.io/txns/GCPjUcna7FdwZjv9sAdcNANXw4GRMdbsLPQ7vLyzUiKi)): the account has no keys,
+> so nobody, us included, can change the code.
 >
 > Our first live deals (8 of them, 2026-11-06..11) ran on a **TEST instance**
 > `9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c` with
@@ -104,7 +104,7 @@ You see, about 10 s later:
 PASS  contract account exists on mainnet
 INFO  code hash vs local build                      (skipped: --build none)
 INFO  NEP-330 contract_source_metadata              (link to github.com/Basssoman/pinky @ 912cb4b)
-FAIL  full-access keys present (1)                  (the deploy key, until it is deleted; then: PASS no full-access keys)
+PASS  no full-access keys: nobody can redeploy or drain the contract account
 PASS  accepted token is NEAR-native USDC
 PASS  config: 1 deals, fee max 300 bps, ...         (real periods: review >= 3 days, dispute 7 days)
 PASS  deal transactions found on mainnet, succeeded, right contract/method/deal: 5/5
@@ -112,7 +112,7 @@ PASS  relayed actions carry a valid deal-key signature (re-verified here with ed
 PASS  deal outcomes on chain match the table: 1/1
 ```
 
-Exit code 0 means every check behaved as expected (after the key is deleted).
+Exit code 0 and `VERIFY_RESULT OK` mean every check passed.
 
 With Rust installed, the attack suite runs too (the first run compiles for a
 few minutes):
@@ -274,7 +274,7 @@ every transition) and `cargo test --test sandbox`.
 |---|---|---|
 | contract account exists | `view_account` answers | PASS |
 | code hash vs local build | sha256 of a **fresh** local build (base58) = the account's `code_hash`: the chain runs exactly this repository's code | PASS with `--build reproducible` from a checkout of `912cb4b` (step 6). From another commit the script says so and prints the commands instead of comparing |
-| full-access keys | 0 full-access keys: nobody can redeploy the code or use the account | **FAIL, 1 key** (the deploy key) until it is deleted |
+| full-access keys | 0 full-access keys: nobody can redeploy the code or use the account | PASS (deploy key deleted 2026-11-14, tx `GCPjUcna…`) |
 | token | `token_id` = NEAR-native USDC `17208628…6133a1` | PASS |
 | config | real periods on the final contract | PASS |
 | transactions | every tx in `verify/mainnet-txs.json` exists (archival RPC), succeeded, called this contract with the listed method / deal / action | PASS 5/5 |
