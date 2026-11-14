@@ -3,12 +3,13 @@
 // reviews (month only, no amounts, for privacy).
 import { useState } from 'react';
 import { useT } from '../i18n';
-import { LIMITS, profileIdOfKey, signReply, type Profile, type ProfileKey, type PublicReview, type Service } from '../lib/market';
+import { isKnownLink, LIMITS, profileIdOfKey, signReply, type Profile, type ProfileKey, type PublicReview, type Service } from '../lib/market';
 import { getCtx, navigate } from '../real/ctx';
 import { Notice, useRun } from '../ui';
 import { market, useMarket, useProfileKey, useTitle } from './ctx';
-import { Avatar, Go, LoadState, MarketProblem, monthName, OutcomeLabel, Rating, Tags } from './parts';
+import { Avatar, ContactBlock, Go, LoadState, MarketProblem, monthName, OutcomeLabel, PortfolioLink, Rating, Tags } from './parts';
 import { ReportLink } from './Report';
+import { ConfirmedAccounts } from './Accounts';
 import { ApiError } from '../lib/api';
 
 export function ProfilePage({ id }: { id: string }) {
@@ -91,19 +92,21 @@ function ProfileView({ p }: { p: Profile }) {
             </div>
           )}
 
+          {/* Accounts whose bio has this profile's code. */}
+          <ConfirmedAccounts accounts={p.accounts} />
+
           {p.portfolio.length > 0 && (
             <div className="mk-block">
               <h2>{t.work}</h2>
               <ul className="mk-links">
-                {p.portfolio.map((l) => (
+                {p.portfolio.map((l, i) => (
                   <li key={l}>
-                    <a href={l} target="_blank" rel="noopener noreferrer nofollow ugc">
-                      {shortLink(l)}
-                      <span aria-hidden="true"> ↗</span>
-                    </a>
+                    <PortfolioLink link={l} known={p.portfolio_known?.[i]} />
                   </li>
                 ))}
               </ul>
+              {/* Only YouTube, Behance, X and Google Drive links open; others are text with their domain. */}
+              {p.portfolio.some((l, i) => p.portfolio_known?.[i] === false || !isKnownLink(l)) && <p className="hint mk-dim">{t.linkText}</p>}
             </div>
           )}
 
@@ -166,26 +169,7 @@ function ProfileView({ p }: { p: Profile }) {
             </p>
           )}
 
-          <div className="mk-contact">
-            <p className="field-label">{t.contact}</p>
-            {p.contacts.length === 0 ? (
-              <p className="hint">{t.noContact}</p>
-            ) : (
-              <>
-                <dl className="mk-contacts">
-                  {p.contacts.map((c, i) => (
-                    <div key={i}>
-                      <dt>{tt.market.contactKinds[c.kind] ?? c.kind}</dt>
-                      <dd>
-                        <ContactValue kind={c.kind} value={c.value} />
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="hint">{t.contactLine}</p>
-              </>
-            )}
-          </div>
+          <ContactBlock contacts={p.contacts} />
 
           {!own && (
             <button className="cta" type="button" onClick={() => order(p.services.length === 1 ? p.services[0] : undefined)}>
@@ -276,27 +260,4 @@ function ReviewItem({ r, profileId, ownerKey }: { r: PublicReview; profileId: st
       )}
     </li>
   );
-}
-
-function shortLink(l: string): string {
-  try {
-    const u = new URL(l);
-    const path = u.pathname === '/' ? '' : u.pathname;
-    const s = `${u.hostname.replace(/^www\./, '')}${path}`;
-    return s.length > 48 ? `${s.slice(0, 46)}…` : s;
-  } catch {
-    return l;
-  }
-}
-
-/** A contact as text, or a link only where the address is unambiguous (email, an https link). */
-function ContactValue({ kind, value }: { kind: string; value: string }) {
-  if (kind === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return <a href={`mailto:${value}`}>{value}</a>;
-  if (/^https:\/\/[^\s]+$/.test(value))
-    return (
-      <a href={value} target="_blank" rel="noopener noreferrer nofollow ugc">
-        {value}
-      </a>
-    );
-  return <span className="mk-contact-value">{value}</span>;
 }

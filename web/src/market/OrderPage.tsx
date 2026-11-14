@@ -1,17 +1,18 @@
 // `/creators/:id/order?service=…`: the request form.
 // No budget field. The client's contact is required. The
 // request link `/r#<token>` is made here; the server gets only its hash.
+// The creator's public contact, if they set one, is shown next to the form.
 import { useEffect, useState } from 'react';
 import { locale, useLang, useT } from '../i18n';
 import { ApiError } from '../lib/api';
 import { PixelSelect } from '../PixelSelect';
 import { sha256Hex } from '../lib/keys';
 import { newToken } from '../lib/local';
-import { CONTACT_KINDS, keyFingerprint, LIMITS, rememberRequest, requestBoxPub, type ContactKind, type Profile } from '../lib/market';
+import { aiLinesOf, CONTACT_KINDS, keyFingerprint, LIMITS, rememberRequest, requestBoxPub, type ContactKind, type Profile } from '../lib/market';
 import { navigate } from '../real/ctx';
 import { Notice, useRun } from '../ui';
 import { market, useMarket, useTitle } from './ctx';
-import { Avatar, Go, LoadState, MarketProblem, marketError } from './parts';
+import { Avatar, ContactBlock, Go, LoadState, MarketProblem, marketError } from './parts';
 
 const GENERAL = '';
 
@@ -41,8 +42,20 @@ export const BRIEF_AI_MAX = 600;
  * an acceptance checklist; the answer replaces the field, the client edits it
  * (or brings their text back). Hidden when the server has no NEAR AI key.
  * The "checked" line shows only when our server verified this answer.
+ * `onAnswer` gets the answer as put in the field (null after "bring my text
+ * back"): the lines the client keeps from it are marked for the creator.
  */
-function BriefHelper({ brief, setBrief, serviceTitle }: { brief: string; setBrief: (s: string) => void; serviceTitle?: string }) {
+function BriefHelper({
+  brief,
+  setBrief,
+  serviceTitle,
+  onAnswer,
+}: {
+  brief: string;
+  setBrief: (s: string) => void;
+  serviceTitle?: string;
+  onAnswer: (answer: string | null) => void;
+}) {
   const tt = useT();
   const t = tt.market.brief;
   const lang = useLang();
@@ -75,8 +88,10 @@ function BriefHelper({ brief, setBrief, serviceTitle }: { brief: string; setBrie
     try {
       const api = await market();
       const r = await api.brief({ request: text, ...(serviceTitle ? { service_title: serviceTitle } : {}), lang: lang.code });
+      const answer = r.checklist.slice(0, LIMITS.brief);
       setMine(brief);
-      setBrief(r.checklist.slice(0, LIMITS.brief));
+      setBrief(answer);
+      onAnswer(answer);
       // One plain line when our server verified the answer (no NVIDIA detail).
       setVerified(r.verified === true);
     } catch (e) {
@@ -100,6 +115,7 @@ function BriefHelper({ brief, setBrief, serviceTitle }: { brief: string; setBrie
             setBrief(mine);
             setMine(null);
             setVerified(false);
+            onAnswer(null);
           }}
         >
           {t.undo}
@@ -189,6 +205,8 @@ function OrderForm({ p }: { p: Profile }) {
   const initial = new URLSearchParams(window.location.search).get('service') ?? GENERAL;
   const [serviceId, setServiceId] = useState(p.services.some((s) => s.id === initial) ? initial : p.services.length ? (p.services[0].id ?? GENERAL) : GENERAL);
   const [brief, setBrief] = useState('');
+  // The AI helper's answer, to mark the lines the client keeps from it.
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
   const [deadline, setDeadline] = useState('');
   const [kind, setKind] = useState<ContactKind>('telegram');
   const [contact, setContact] = useState('');
@@ -208,6 +226,7 @@ function OrderForm({ p }: { p: Profile }) {
     const token = newToken();
     const handle = sha256Hex(token);
     const api = await market();
+    const aiLines = aiLinesOf(brief, aiAnswer);
     const sent = await api.createRequest({
       handle,
       profile_id: p.profile_id,
@@ -216,6 +235,7 @@ function OrderForm({ p }: { p: Profile }) {
       ...(deadline ? { wanted_deadline: deadline } : {}),
       client_contact: { kind, value: contact.trim() },
       client_box_pk: requestBoxPub(token),
+      ...(aiLines.length ? { ai_lines: aiLines } : {}),
     });
     // Pin the creator's profile key now; "deal ready" and the nickname are checked against it later.
     const pinned = typeof sent.profile_pk === 'string' ? sent.profile_pk : undefined;
@@ -290,7 +310,7 @@ function OrderForm({ p }: { p: Profile }) {
               <textarea rows={6} value={brief} maxLength={LIMITS.brief} onChange={(e) => setBrief(e.target.value)} placeholder={t.briefPlaceholder} />
               {err('brief') ?? (brief.length > LIMITS.brief - 200 && <span className="hint">{t.left(LIMITS.brief - brief.length)}</span>)}
             </label>
-            <BriefHelper brief={brief} setBrief={setBrief} serviceTitle={service?.title} />
+            <BriefHelper brief={brief} setBrief={setBrief} serviceTitle={service?.title} onAnswer={setAiAnswer} />
 
             <div className="field mk-date">
               <span className="field-label" id="mk-deadline">{t.deadline}</span>
@@ -356,6 +376,8 @@ function OrderForm({ p }: { p: Profile }) {
               {service.description && <p className="hint mk-service-desc">{service.description}</p>}
             </>
           )}
+          {/* The creator's public contact, same as on the profile (only when they set one). */}
+          {p.contacts.length > 0 && <ContactBlock contacts={p.contacts} />}
         </aside>
       </div>
     </main>

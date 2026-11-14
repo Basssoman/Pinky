@@ -573,7 +573,9 @@ test('deal from request: linked, request shows the encrypted link; cancel/declin
   // The deal itself is a normal deal.
   const g = await app.inject({ method: 'GET', url: `/api/deals/${b.handle}`, headers: { 'x-deal-token': b.token } });
   assert.equal(g.statusCode, 200);
-  // A second deal from the same request replaces the link shown.
+  // A second deal from the same request only after the first link was cancelled; it replaces the link shown.
+  assert.equal((await dealFromRequest(alice, r.handle)).res.json().error, 'deal_live');
+  store.markRevoked(b.handle);
   const second = await dealFromRequest(alice, r.handle);
   assert.equal(second.res.statusCode, 201, second.res.body);
 });
@@ -596,9 +598,12 @@ test('deal from request: bad signatures store nothing', async () => {
   // Replay of a used request signature on a new deal.
   const ok = await dealFromRequest(alice, r.handle);
   assert.equal(ok.res.statusCode, 201);
+  store.markRevoked(ok.b.handle);
   const e = exp();
   const sig = alice.signRaw(requestDealMessage(CONTRACT_ID, r.handle, creatorDeal.pk, e));
-  assert.equal((await dealFromRequest(alice, r.handle, { e, sig })).res.statusCode, 201);
+  const used = await dealFromRequest(alice, r.handle, { e, sig });
+  assert.equal(used.res.statusCode, 201);
+  store.markRevoked(used.b.handle);
   await check({ e, sig }, 401, 'replayed_request');
   // Unknown request.
   const { res } = await dealFromRequest(alice, 'e'.repeat(64));
@@ -679,7 +684,12 @@ test('deal from request: deal_link_box limits; the box is stored opaque and retu
 test('deal from request: at most 5 deals per request', async () => {
   await createProfile(alice);
   const r = await openRequest(alice.id);
-  for (let i = 0; i < 5; i++) assert.equal((await dealFromRequest(alice, r.handle)).res.statusCode, 201);
+  for (let i = 0; i < 5; i++) {
+    const d = await dealFromRequest(alice, r.handle);
+    assert.equal(d.res.statusCode, 201);
+    // One live deal at a time: the creator cancels the link before the next one.
+    store.markRevoked(d.b.handle);
+  }
   const sixth = await dealFromRequest(alice, r.handle);
   assert.equal(sixth.res.statusCode, 409);
   assert.equal(sixth.res.json().error, 'too_many_deals');

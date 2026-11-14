@@ -4,7 +4,21 @@
 // production build).
 
 import { ApiError } from './api';
-import type { Card, Contact, InboxItem, KeyChange, LinkBox, Profile, ProfileFields, PublicReview, RequestView, ReviewLink, SignedWrite } from './market';
+import type {
+  Card,
+  Contact,
+  InboxItem,
+  KeyChange,
+  KeyResetEntry,
+  LinkBox,
+  OwnAccount,
+  Profile,
+  ProfileFields,
+  PublicReview,
+  RequestView,
+  ReviewLink,
+  SignedWrite,
+} from './market';
 
 export interface NewRequest {
   profile_id: string;
@@ -14,6 +28,8 @@ export interface NewRequest {
   client_contact: Contact;
   /** x25519 key (hex) the deal link will be encrypted to; derived from the request token. */
   client_box_pk: string;
+  /** Lines of `brief` (0-based) the AI helper wrote and the client kept as they were: the creator sees them marked. */
+  ai_lines?: number[];
 }
 
 /** What `POST /api/deals` gets in addition when the deal is made from a request. */
@@ -80,6 +96,15 @@ export interface MarketApi {
   avatarUrl(profileId: string, version: string): string;
   /** "Report": stored for the team; no sign-in, no key. */
   report(body: NewReport): Promise<{ ok: boolean }>;
+  /** Public log of key changes by support. */
+  keyResets(): Promise<{ items: KeyResetEntry[] }>;
+  /** The client opened a deal that ended by itself (starts the 3-day review window). */
+  openReview(dealHandle: string, dealToken: string, body: SignedWrite): Promise<{ ok: boolean; started: boolean; can_review: boolean; review_until: string | null }>;
+  /** Verified accounts, the owner's side; all signed by the profile key. */
+  accounts(profileId: string, auth: { profile_pk: string } & SignedWrite): Promise<{ items: OwnAccount[] }>;
+  addAccount(profileId: string, body: { profile_pk: string; url: string } & SignedWrite): Promise<{ ok: boolean; account: OwnAccount }>;
+  checkAccount(profileId: string, accountId: string, body: { profile_pk: string } & SignedWrite): Promise<{ ok: boolean; result: string; account: OwnAccount }>;
+  removeAccount(profileId: string, accountId: string, body: { profile_pk: string } & SignedWrite): Promise<{ ok: boolean }>;
 }
 
 export function httpMarketApi(base: string, fetchImpl: typeof fetch = (...a) => fetch(...a)): MarketApi {
@@ -142,5 +167,11 @@ export function httpMarketApi(base: string, fetchImpl: typeof fetch = (...a) => 
     removeAvatar: (id, body) => call('DELETE', `/api/profiles/${id}/avatar`, { body }),
     avatarUrl: (id, v) => `${base}/api/profiles/${encodeURIComponent(id)}/avatar/${encodeURIComponent(v)}`,
     report: (body) => call('POST', '/api/reports', { body }),
+    keyResets: () => call('GET', '/api/key-resets'),
+    openReview: (handle, token, body) => call('POST', `/api/deals/${handle}/review/open`, { headers: { 'X-Deal-Token': token }, body }),
+    accounts: (id, auth) => call('GET', `/api/profiles/${id}/accounts${qs({ profile_pk: auth.profile_pk, expires_at_ns: auth.expires_at_ns, sig: auth.sig })}`),
+    addAccount: (id, body) => call('POST', `/api/profiles/${id}/accounts`, { body }),
+    checkAccount: (id, aid, body) => call('POST', `/api/profiles/${id}/accounts/${aid}/check`, { body }),
+    removeAccount: (id, aid, body) => call('DELETE', `/api/profiles/${id}/accounts/${aid}`, { body }),
   };
 }

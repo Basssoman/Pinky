@@ -1,5 +1,6 @@
 // Routes. Real pages go by path: `/new` (creator), `/d#<token>` (the deal,
-// both sides), `/k#<key>` (personal link), `/status`, `/disputes`; the
+// both sides), `/k#<key>` (personal link), `/status`, `/disputes`,
+// `/key-resets` (public log of profile key changes by support); the
 // marketplace: `/creators`, `/creators/<id>`, `/creators/<id>/order`,
 // `/profile`, `/p#<recovery>`, `/inbox`, `/r#<request token>`. The home
 // page and the example deal (`?step=`, made-up data) need no server.
@@ -19,6 +20,7 @@ import { InboxPage } from './market/Inbox';
 import { OrderPage } from './market/OrderPage';
 import { ProfilePage } from './market/ProfilePage';
 import { BadRequestLink, RequestPage } from './market/RequestPage';
+import { KeyResetsPage } from './market/KeyResets';
 import { isProfileId, parseRequestLink } from './lib/market';
 
 function readLocation() {
@@ -65,6 +67,8 @@ export function App() {
         return <StatusPage />;
       case '/disputes':
         return <DisputesPage />;
+      case '/key-resets':
+        return <KeyResetsPage />;
       // marketplace
       case '/creators':
         return <Catalog />;

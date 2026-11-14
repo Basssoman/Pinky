@@ -29,7 +29,8 @@ export interface DealInfo {
   creatorCode: string;
   clientCode: string | null;
   /** The creator's profile when the deal came from a request; null for a direct deal. */
-  creator: { nick: string; profileUrl: string } | null;
+  /** `profileId`: for the "key / contact changed N days ago" note; absent in the example deal. */
+  creator: { nick: string; profileUrl: string; profileId?: string } | null;
 }
 
 /** Example deal behind "See an example deal". Nothing here is real; the texts follow the chosen language. */

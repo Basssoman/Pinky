@@ -15,7 +15,7 @@
 // deal ids, wallets, keys or dates finer than a month. The client contact
 // leaves the server only in the creator's signed inbox.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -42,6 +42,8 @@ import {
 } from './market-store.ts';
 import type { Store } from './store.ts';
 import { AVATAR, AvatarError, bytesSha256Hex, reencodeAvatar, sniffImage } from './market-avatar.ts';
+import { AUTO_PLATFORMS, parseAccountUrl, processChecker, verifyCode, type AccountChecker } from './accounts.ts';
+import type { AccountRow } from './market-store.ts';
 
 export const CATEGORIES = ['video', 'motion', 'design', 'editing', 'code', 'other'] as const;
 export const CONTACT_KINDS = ['telegram', 'x', 'discord', 'whatsapp', 'email', 'other'] as const;
@@ -79,6 +81,17 @@ export const IDLE_OPEN_MAX_MS = 30 * DAY_MS;
 /** Outcomes where nobody acted: the review timer released the money, or the delivery deadline passed. */
 const IDLE_OUTCOMES = ['AutoReleased', 'RefundedAfterDeadline'];
 const RESET_LOG_LIMIT = 100;
+/** Accounts with a verification code per profile. */
+export const MAX_ACCOUNTS = 3;
+/**
+ * A reset code in the bio of a CONFIRMED account beats the current
+ * key only when the account was confirmed this long before the reset: a thief
+ * holding the key could add and confirm an account of their own, and it
+ * shows on the public profile for 14 days before it could be used.
+ */
+export const VERIFIED_PROOF_MIN_AGE_MS = 14 * DAY_MS;
+const ACCOUNT_CHECKS_PER_MIN = 3;
+const DAILY_ACCOUNT_CHECKS_PER_PROFILE = 30;
 
 const SEC_NS = 1_000_000_000n;
 /** A signed message may expire at most this far ahead (API.md: 10 min, + 30 s clock skew). */
@@ -86,7 +99,7 @@ const MAX_EXPIRY_AHEAD_NS = 10n * 60n * SEC_NS + 30n * SEC_NS;
 const PAGE = 24;
 const INBOX_LIMIT = 200;
 const PROFILE_REVIEWS = 50;
-/** Deals that may be made from one request (a new deal replaces the one shown). */
+/** Deals that may be made from one request in all (only one of them live at a time). */
 const MAX_DEALS_PER_REQUEST = 5;
 const HANDLE_RE = /^[0-9a-f]{64}$/;
 const PROFILE_ID_RE = /^[0-9a-f]{24}$/;
@@ -141,6 +154,16 @@ export const discussMessage = (contractId: string, handle: string, exp: string) 
 /** The current profile key cancels a key reset in progress. */
 export const keyResetCancelMessage = (contractId: string, profileId: string, resetId: string, exp: string) =>
   `${MESSAGE_PREFIX}|${contractId}|profile-key-reset-cancel|${profileId}|${resetId}|${exp}`;
+/** Add an account to the profile; signs sha256 of the link exactly as sent. */
+export const accountAddMessage = (contractId: string, profileId: string, url: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-account-add|${profileId}|${sha256Hex(url)}|${exp}`;
+/** The owner reads the accounts with their codes. */
+export const accountsReadMessage = (contractId: string, profileId: string, exp: string) => `${MESSAGE_PREFIX}|${contractId}|profile-accounts|${profileId}|${exp}`;
+/** "Check now": the site reads the account's bio. */
+export const accountCheckMessage = (contractId: string, profileId: string, accountId: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-account-check|${profileId}|${accountId}|${exp}`;
+export const accountRemoveMessage = (contractId: string, profileId: string, accountId: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-account-remove|${profileId}|${accountId}|${exp}`;
 export const requestDealMessage = (contractId: string, handle: string, creatorPk: string, exp: string) =>
   `${MESSAGE_PREFIX}|${contractId}|request-deal|${handle}|${creatorPk}|${exp}`;
 /** The client opened a deal that ended by itself (signed by the deal's client key; starts the review window). */
@@ -196,6 +219,38 @@ function contact(v: unknown, where: string, code: string): ContactV {
     throw bad(`${where}.kind must be one of ${CONTACT_KINDS.join(', ')}`, code);
   }
   return { kind: v.kind, value: text(v.value, `${where}.value`, MARKET_LIMITS.contact, { min: 1, code }) };
+}
+
+/**
+ * Portfolio links open from the site only for these hosts
+ * (YouTube, Behance, X, Google Drive). Any other https link is kept but
+ * shown as plain text with its domain, so a look-alike site cannot be one
+ * click away.
+ */
+export const KNOWN_LINK_HOSTS: readonly string[] = [
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'behance.net',
+  'www.behance.net',
+  'x.com',
+  'www.x.com',
+  'mobile.x.com',
+  'twitter.com',
+  'www.twitter.com',
+  'mobile.twitter.com',
+  'drive.google.com',
+];
+
+/** An https link to one of the known hosts (exact host, default port, no user name). */
+export function isKnownLink(s: string): boolean {
+  try {
+    const u = new URL(s);
+    return u.protocol === 'https:' && !u.port && !u.username && !u.password && KNOWN_LINK_HOSTS.includes(u.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function httpsLink(v: unknown, where: string): string {
@@ -269,6 +324,25 @@ function parseBox(v: unknown): LinkBox | null {
   return { epk, iv, ct };
 }
 
+/**
+ * Which lines of the brief the AI helper wrote, as the client’s
+ * browser marks them: 0-based line numbers (the brief as stored, split on
+ * a line break), rising, each a line with text. Missing or empty = none.
+ */
+export function parseAiLines(v: unknown, brief: string): number[] {
+  if (v === undefined || v === null) return [];
+  const lines = brief.split('\n');
+  if (!Array.isArray(v) || v.length > lines.length) throw bad('ai_lines must be a list of line numbers of the brief', 'bad_ai_lines');
+  let last = -1;
+  for (const n of v) {
+    if (typeof n !== 'number' || !Number.isInteger(n) || n <= last || n >= lines.length || !lines[n].trim()) {
+      throw bad('ai_lines must be rising numbers of brief lines that have text (0-based)', 'bad_ai_lines');
+    }
+    last = n;
+  }
+  return v as number[];
+}
+
 /** "YYYY-MM-DD", a real date, from yesterday (time zones) to a year ahead. */
 function parseDeadline(v: unknown, nowMs: number): string | null {
   if (v === undefined || v === null || v === '') return null;
@@ -328,6 +402,17 @@ export function reviewUntilMs(l: { ended_ms: number | null; idle_end?: boolean; 
   return start + windowMs;
 }
 
+/**
+ * The confirmed account of this profile at `accountUrl`, if it was
+ * confirmed at least 14 days before `atMs` and is still confirmed; else null.
+ */
+export function verifiedProof(ms: MarketStore, profileId: string, accountUrl: string, atMs: number): AccountRow | null {
+  const ref = parseAccountUrl(accountUrl);
+  const a = ref ? ms.accountByUrl(profileId, ref.url) : null;
+  if (!a || a.status !== 'confirmed' || !a.confirmed_at) return null;
+  return atMs - Date.parse(a.confirmed_at) >= VERIFIED_PROOF_MIN_AGE_MS ? a : null;
+}
+
 // ---------------------------------------------------------------- routes
 
 export interface MarketDeps {
@@ -337,6 +422,8 @@ export interface MarketDeps {
   now: () => number;
   /** The app's per-minute limiter (shared buckets). */
   limiter: RateLimiter;
+  /** Reads account bios; default: a separate process per check. */
+  accountChecker?: AccountChecker;
 }
 
 export interface Market {
@@ -357,10 +444,13 @@ export interface Market {
   reviewWindow(dealHandle: string): { until_ms: number; open: boolean; reviewed: boolean } | null;
   /** Closes requests without an answer for 7 days and applies key resets whose 72 h passed. */
   upkeep(): void;
+  /** Re-reads the bios of confirmed accounts not read for ACCOUNT_RECHECK_HOURS; returns how many. */
+  recheckAccounts(limit?: number): Promise<number>;
 }
 
 export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
   const { config, chain, store, now, limiter } = deps;
+  const checker = deps.accountChecker ?? processChecker();
   const db = (store as { db?: DatabaseSync }).db ?? new DatabaseSync(':memory:');
   const ms = new MarketStore(db, now);
   // Profile-scoped daily caps survive a restart; IP ones stay in memory (no IPs on disk).
@@ -430,11 +520,33 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
     return c ? { what: c.what, days_ago: Math.floor((now() - Date.parse(c.at)) / DAY_MS) } : null;
   }
 
-  /** "the key of this profile is being changed" until the time it takes effect. */
-  function keyChange(profileId: string): { reset_id: string; effective_at: string } | null {
+  /**
+   * "the key of this profile is being changed" until the time it takes effect.
+   * `cancellable` false = proved through a confirmed account: only support can stop it.
+   */
+  function keyChange(profileId: string): { reset_id: string; effective_at: string; cancellable: boolean } | null {
     const r = ms.openReset(profileId);
-    return r && r.status === 'pending' && r.effective_at ? { reset_id: r.reset_id, effective_at: r.effective_at } : null;
+    return r && r.status === 'pending' && r.effective_at ? { reset_id: r.reset_id, effective_at: r.effective_at, cancellable: r.proof !== 'verified' } : null;
   }
+
+  /** "account confirmed: @handle" (control of the account, not authorship of every work). */
+  const publicAccounts = (profileId: string) =>
+    ms
+      .accountsOf(profileId)
+      .filter((a) => a.status === 'confirmed')
+      .map((a) => ({ platform: a.platform, handle: a.handle, url: a.url }));
+
+  /** What the owner sees: the code to put in the bio and where it stands. How the mark was made stays in the log. */
+  const ownerAccount = (a: AccountRow) => ({
+    account_id: a.account_id,
+    platform: a.platform,
+    url: a.url,
+    handle: a.handle,
+    code: a.code,
+    status: a.status,
+    // The site cannot read this account's bio itself (X): a person of the team looks.
+    by_hand: !AUTO_PLATFORMS.includes(a.platform as (typeof AUTO_PLATFORMS)[number]),
+  });
 
   /** The client's browser checks this against the profile key it pinned. */
   function profileProof(p: ProfileRow) {
@@ -474,6 +586,8 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
       bio: p.bio,
       categories: p.categories,
       portfolio: p.portfolio,
+      // Per portfolio link, true = a known host (the site may make it clickable); others are shown as text.
+      portfolio_known: p.portfolio.map(isKnownLink),
       contacts: p.contacts,
       services: ms.getServices(p.profile_id),
       finished_deals: p.finished_deals,
@@ -487,6 +601,8 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
       recent_change: recentChange(p),
       // "the key of this profile is being changed" (the time and the id only in the owner's signed inbox).
       key_changing: keyChange(p.profile_id) !== null,
+      // Confirmed accounts (the code is in their bio).
+      accounts: publicAccounts(p.profile_id),
     };
   }
 
@@ -717,6 +833,7 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
       service = { id: s.id, title: s.title, price_from_usdc: s.price_from_usdc, delivery_days: s.delivery_days };
     }
     const brief = text(body.brief, 'brief', MARKET_LIMITS.brief, { min: 1, multiline: true });
+    const aiLines = parseAiLines(body.ai_lines, brief);
     const wanted = parseDeadline(body.wanted_deadline, now());
     if (body.client_contact === undefined || body.client_contact === null) throw bad('client_contact is required', 'bad_contact');
     const c = contact(body.client_contact, 'client_contact', 'bad_contact');
@@ -736,6 +853,7 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
       contact_kind: c.kind,
       contact_value: c.value,
       client_box_pk: boxPk,
+      ai_lines: aiLines,
     });
     for (const k of Object.values(keys)) daily.add(k);
     reply.status(201);
@@ -756,6 +874,54 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
     } catch {
       return true;
     }
+  }
+
+  /**
+   * The deal of this link can never be paid: never joined and its link was
+   * cancelled or expired, or joined and it ended unpaid on-chain (cancelled,
+   * expired). Read from what the server already knows, without a chain call.
+   */
+  function linkDead(link: LinkRow): boolean {
+    const rec = store.getDeal(link.deal_handle);
+    if (!rec) return true;
+    if (rec.deal_id === null) {
+      if (rec.revoked_at !== null) return true;
+      try {
+        return nowNs() > BigInt(parseOffer(rec.offer).offer_expires_at_ns);
+      } catch {
+        return true;
+      }
+    }
+    return link.final && !link.reviewable && !link.counted;
+  }
+
+  /** USDC base units (6 decimals) as a short decimal text: "12500000" -> "12.5". */
+  const usdcText = (units: string): string => {
+    const v = BigInt(units);
+    const whole = v / 1_000_000n;
+    const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+    return frac ? `${whole}.${frac}` : whole.toString();
+  };
+
+  /**
+   * Deals of this request that must not be paid: every deal except the one
+   * the request page shows now. The client's browser opens each box to show
+   * the start of its link, so the client can match it with what they got.
+   */
+  function oldDeals(r: RequestRow, shown: LinkRow | null) {
+    return ms
+      .linksOf(r.handle)
+      .filter((l) => l.deal_handle !== shown?.deal_handle)
+      .map((l) => {
+        const rec = store.getDeal(l.deal_handle);
+        let amount: string | null = null;
+        try {
+          amount = rec ? usdcText(rec.amount) : null;
+        } catch {
+          amount = null;
+        }
+        return { made_on: l.created_at.slice(0, 10), title: rec?.title ?? null, amount_usdc: amount, deal_link_box: l.deal_link_box };
+      });
   }
 
   /** When an unanswered request closes by itself (null once answered). */
@@ -803,6 +969,8 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
       deal_link_box: link?.deal_link_box ?? null,
       // The profile key's signature over (this request, the deal's creator key); the browser checks it before "pay".
       deal_proof: link?.proof ?? null,
+      // Older deals of this request (newest first): not valid, the client must not pay them.
+      old_deals: oldDeals(r, link),
     };
   });
 
@@ -833,6 +1001,13 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
     checkSigned(p.profile_pk, inboxMessage(cid, id, exp), sig, exp);
     ownerLimit(`minbox:${id}`, INBOX_READS_PER_MIN, 'too many inbox reads; wait a minute');
     upkeep();
+    // The last deal of a request can no longer be paid (link cancelled or expired): back to "in talks" now,
+    // so the creator can make the one new deal without waiting for the refresh timer.
+    for (const r of ms.inbox(id, INBOX_LIMIT)) {
+      if (r.status !== 'deal_ready') continue;
+      const last = ms.latestLink(r.handle);
+      if (last && linkDead(last)) ms.reopenAfterDeadDeal(last.deal_handle);
+    }
     const items = ms.inbox(id, INBOX_LIMIT).map((r) => ({
       handle: r.handle,
       // As it was before this read: the creator sees "new" once; the client sees "viewed" from now on.
@@ -845,6 +1020,8 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
       client_box_pk: r.client_box_pk,
       decline_reason: r.decline_reason,
       closes_at: closesAt(r),
+      // Brief lines the AI helper wrote (the creator checks them with the client). Never on the client's page.
+      ai_lines: r.ai_lines,
     }));
     ms.markViewed(id);
     return { items, key_change: keyChange(id) };
@@ -918,9 +1095,128 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
     const r = ms.getReset(rid);
     if (!r || r.profile_id !== id) throw new HttpError(404, 'reset_not_found', 'no such key change for this profile');
     if (r.status !== 'issued' && r.status !== 'pending') throw new HttpError(409, 'reset_done', `this key change is already ${r.status}`);
+    // Proved through an account confirmed on this profile long before: a stolen key cannot stop it.
+    if (r.proof === 'verified') {
+      throw new HttpError(403, 'verified_proof', 'this key change was proved through a confirmed account of this profile; only support can stop it');
+    }
     ms.cancelReset(rid, 'owner_key');
     return { ok: true, profile_id: id, reset_id: rid, status: 'cancelled' };
   });
+
+  // ------------------------------------------------------------ verified accounts
+
+  /** An existing profile, not hidden by the operator, and a request signed by its key. */
+  function accountOwner(req: FastifyRequest, body: Body): ProfileRow {
+    const id = profileParam(req);
+    const p = ms.getProfile(id);
+    if (!p || p.hidden) throw new HttpError(404, 'profile_not_found', 'save the profile first, then add an account');
+    if (body.profile_pk !== undefined && body.profile_pk !== p.profile_pk) throw new HttpError(403, 'wrong_key', 'this profile belongs to another key');
+    return p;
+  }
+
+  function accountParam(req: FastifyRequest, p: ProfileRow): AccountRow {
+    const aid = (req.params as { aid?: string }).aid ?? '';
+    const a = /^[0-9a-f]{16}$/.test(aid) ? ms.getAccount(aid) : null;
+    if (!a || a.profile_id !== p.profile_id) throw new HttpError(404, 'account_not_found', 'no such account on this profile');
+    return a;
+  }
+
+  // The owner's list, with the codes (query string like the inbox: logs never contain it).
+  app.get('/api/profiles/:id/accounts', async (req) => {
+    readLimit(req);
+    const q = (req.query ?? {}) as Body;
+    const p = accountOwner(req, q);
+    const exp = expiry(q.expires_at_ns);
+    const sig = sigOf(q.sig);
+    checkSigned(p.profile_pk, accountsReadMessage(cid, p.profile_id, exp), sig, exp);
+    ownerLimit(`maccread:${p.profile_id}`, INBOX_READS_PER_MIN, 'too many reads; wait a minute');
+    return { items: ms.accountsOf(p.profile_id).map(ownerAccount) };
+  });
+
+  // Body {profile_pk, url, expires_at_ns, sig}: a YouTube channel, an X account or a Behance profile.
+  app.post('/api/profiles/:id/accounts', async (req, reply) => {
+    writeLimit(req);
+    const body = (req.body ?? {}) as Body;
+    const p = accountOwner(req, body);
+    const raw = body.url;
+    if (typeof raw !== 'string' || raw.length === 0 || raw.length > MARKET_LIMITS.link) throw bad('url must be a link to your account', 'bad_account');
+    const exp = expiry(body.expires_at_ns);
+    const sig = sigOf(body.sig);
+    checkSigned(p.profile_pk, accountAddMessage(cid, p.profile_id, raw, exp), sig, exp);
+    ownerLimit(`mprofile:${p.profile_id}`, PROFILE_WRITES_PER_MIN, 'too many changes of this profile; wait a minute');
+    const ref = parseAccountUrl(raw);
+    if (!ref) throw bad('use the link of your YouTube channel, X account or Behance profile (https)', 'bad_account');
+    const same = ms.accountByUrl(p.profile_id, ref.url);
+    if (same) return { ok: true, account: ownerAccount(same) };
+    if (ms.accountsOf(p.profile_id).length >= MAX_ACCOUNTS) throw new HttpError(409, 'too_many_accounts', `at most ${MAX_ACCOUNTS} accounts per profile`);
+    // A random code per (profile, account), unlike the key-reset code.
+    const a = ms.insertAccount({ account_id: randomBytes(8).toString('hex'), profile_id: p.profile_id, platform: ref.platform, url: ref.url, handle: ref.handle, code: verifyCode() });
+    reply.status(201);
+    return { ok: true, account: ownerAccount(a) };
+  });
+
+  // "Check now": the site reads the bio (a separate process); X waits for a person of the team.
+  app.post('/api/profiles/:id/accounts/:aid/check', async (req) => {
+    writeLimit(req);
+    const body = (req.body ?? {}) as Body;
+    const p = accountOwner(req, body);
+    const a = accountParam(req, p);
+    const exp = expiry(body.expires_at_ns);
+    const sig = sigOf(body.sig);
+    checkSigned(p.profile_pk, accountCheckMessage(cid, p.profile_id, a.account_id, exp), sig, exp);
+    ownerLimit(`maccheck:${a.account_id}`, ACCOUNT_CHECKS_PER_MIN, 'too many checks; wait a minute');
+    const dayKey = `maccheckp:${p.profile_id}`;
+    dailyCap(dayKey, DAILY_ACCOUNT_CHECKS_PER_PROFILE, 'too many checks today; try again tomorrow');
+    daily.add(dayKey);
+    const result = await checker.check({ platform: a.platform as never, url: a.url, handle: a.handle, codes: [a.code] });
+    const after = ms.recordCheck(a.account_id, result === 'refused' ? 'unreadable' : result)!;
+    return { ok: true, result, account: ownerAccount(after) };
+  });
+
+  app.delete('/api/profiles/:id/accounts/:aid', async (req) => {
+    writeLimit(req);
+    const body = (req.body ?? {}) as Body;
+    const p = accountOwner(req, body);
+    const a = accountParam(req, p);
+    const exp = expiry(body.expires_at_ns);
+    const sig = sigOf(body.sig);
+    checkSigned(p.profile_pk, accountRemoveMessage(cid, p.profile_id, a.account_id, exp), sig, exp);
+    ownerLimit(`mprofile:${p.profile_id}`, PROFILE_WRITES_PER_MIN, 'too many changes of this profile; wait a minute');
+    ms.deleteAccount(a.account_id);
+    return { ok: true, account_id: a.account_id };
+  });
+
+  /** Re-reads confirmed accounts; the mark goes when the code is gone (2 reads in a row). */
+  async function recheckAccounts(limit = 20): Promise<number> {
+    const period = config.accountRecheckHours * 3600 * 1000;
+    let n = 0;
+    for (const a of ms.accountsToRecheck(AUTO_PLATFORMS, now() - period, limit)) {
+      const result = await checker.check({ platform: a.platform as never, url: a.url, handle: a.handle, codes: [a.code] });
+      ms.recordCheck(a.account_id, result === 'refused' ? 'unreadable' : result);
+      n++;
+    }
+    return n;
+  }
+
+  if (config.accountRecheckHours > 0) {
+    let busy = false;
+    const timer = setInterval(
+      () => {
+        if (busy) return;
+        busy = true;
+        void recheckAccounts()
+          .catch(() => {
+            /* next round */
+          })
+          .finally(() => {
+            busy = false;
+          });
+      },
+      Math.min(config.accountRecheckHours, 1) * 3600 * 1000,
+    );
+    timer.unref();
+    app.addHook('onClose', async () => clearInterval(timer));
+  }
 
   // ------------------------------------------------------------ deal from request
 
@@ -935,6 +1231,11 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
     if (r.status === 'declined' || r.status === 'cancelled' || r.status === 'closed') throw new HttpError(409, 'request_closed', `the request is ${r.status}`);
     if (body.profile_pk !== undefined && body.profile_pk !== p.profile_pk) throw new HttpError(403, 'wrong_key', 'this request is for another profile');
     if (ms.countLinks(rh) >= MAX_DEALS_PER_REQUEST) throw new HttpError(409, 'too_many_deals', `at most ${MAX_DEALS_PER_REQUEST} deals per request`);
+    // One live deal per request: a new one only after the newest one was cancelled or its link expired.
+    const newest = ms.latestLink(rh);
+    if (newest && !linkDead(newest)) {
+      throw new HttpError(409, 'deal_live', 'the last deal of this request is still open; cancel its link or wait until it expires, then make a new one');
+    }
     const box = parseBox(body.deal_link_box);
     const exp = expiry(body.request_expires_at_ns, 'request_expires_at_ns');
     const sig = sigOf(body.request_sig, 'request_sig');
@@ -1160,5 +1461,5 @@ export function registerMarket(app: FastifyInstance, deps: MarketDeps): Market {
     return { until_ms: until, open: windowOpen(link), reviewed: !!ms.getReview(dealHandle) };
   }
 
-  return { store: ms, prepareDealLink, refreshLinks, reviewWindow, upkeep };
+  return { store: ms, prepareDealLink, refreshLinks, reviewWindow, upkeep, recheckAccounts };
 }

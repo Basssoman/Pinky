@@ -99,6 +99,11 @@ export interface RequestRow {
   status: RequestStatus;
   /** The creator's optional reason with a decline. */
   decline_reason: string | null;
+  /**
+   * Lines of `brief` (0-based, split on line breaks) that the AI helper wrote and the
+   * client kept as they were; the creator’s inbox marks them.
+   */
+  ai_lines: number[];
   created_at: string;
   updated_at: string;
 }
@@ -214,6 +219,34 @@ export interface KeyResetRow {
    * cannot cancel it; only the operator can). null = plain reset.
    */
   proof: 'verified' | null;
+}
+
+/**
+ * A creator account on the profile: waiting (code given,
+ * not seen yet) -> review (the site could not read the page: a person of the
+ * team checks by hand) -> confirmed -> lost (the code is gone); removed by the
+ * owner = the row is deleted.
+ */
+export type AccountStatus = 'waiting' | 'review' | 'confirmed' | 'lost';
+
+export interface AccountRow {
+  account_id: string;
+  profile_id: string;
+  platform: string;
+  url: string;
+  handle: string;
+  code: string;
+  status: AccountStatus;
+  /** How the mark was made: "auto" (the site read the bio) or "operator" (checked by hand). Kept in the log only. */
+  method: 'auto' | 'operator' | null;
+  created_at: string;
+  confirmed_at: string | null;
+  /** Last read of the page (ms), and what it said. */
+  checked_ms: number;
+  last_result: string | null;
+  /** Reads in a row where the page was read but the code was not there (the mark goes at 2). */
+  misses: number;
+  lost_at: string | null;
 }
 
 export interface CatalogQuery {
@@ -339,6 +372,25 @@ export class MarketStore {
       );
       CREATE INDEX IF NOT EXISTS market_key_resets_profile ON market_key_resets (profile_id, issued_at);
       CREATE INDEX IF NOT EXISTS market_key_resets_status ON market_key_resets (status, effective_at);
+      -- Creator accounts with a verification code in the bio: also the log of how each mark was made.
+      CREATE TABLE IF NOT EXISTS market_accounts (
+        account_id TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        url TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        code TEXT NOT NULL,
+        status TEXT NOT NULL,
+        method TEXT,
+        created_at TEXT NOT NULL,
+        confirmed_at TEXT,
+        checked_ms INTEGER NOT NULL DEFAULT 0,
+        last_result TEXT,
+        misses INTEGER NOT NULL DEFAULT 0,
+        lost_at TEXT,
+        UNIQUE (profile_id, url)
+      );
+      CREATE INDEX IF NOT EXISTS market_accounts_status ON market_accounts (status, checked_ms);
       -- Replay cache of marketplace signatures (kept until they expire, survives a restart).
       CREATE TABLE IF NOT EXISTS market_used_sigs (
         sig TEXT PRIMARY KEY,
@@ -359,6 +411,7 @@ export class MarketStore {
     this.addColumn('market_profiles', 'contacts_changed_at', 'TEXT');
     this.addColumn('market_profiles', 'key_changed_at', 'TEXT');
     this.addColumn('market_requests', 'decline_reason', 'TEXT');
+    this.addColumn('market_requests', 'ai_lines', 'TEXT');
     this.addColumn('market_request_deals', 'proof', 'TEXT');
     // 2026-11-13: review window of "nobody acted" deals starts on the client's first open.
     this.addColumn('market_request_deals', 'idle_end', 'INTEGER');
@@ -380,6 +433,11 @@ export class MarketStore {
 
   private iso(): string {
     return new Date(this.now()).toISOString();
+  }
+
+  /** The store's clock (ms): the operator tools use it, so tests can move time. */
+  nowMs(): number {
+    return this.now();
   }
 
   // ------------------------------------------------------------ replay cache
@@ -640,17 +698,18 @@ export class MarketStore {
       client_box_pk: r.client_box_pk as string,
       status: r.status as RequestStatus,
       decline_reason: (r.decline_reason as string | null) ?? null,
+      ai_lines: json<number[]>(r.ai_lines, []),
       created_at: r.created_at as string,
       updated_at: r.updated_at as string,
     };
   }
 
-  insertRequest(r: Omit<RequestRow, 'status' | 'decline_reason' | 'created_at' | 'updated_at'>): void {
+  insertRequest(r: Omit<RequestRow, 'status' | 'decline_reason' | 'ai_lines' | 'created_at' | 'updated_at'> & { ai_lines?: number[] }): void {
     const at = this.iso();
     this.db
       .prepare(
         `INSERT INTO market_requests (handle, profile_id, service, brief, wanted_deadline, contact_kind, contact_value,
-           client_box_pk, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+           client_box_pk, ai_lines, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
       )
       .run(
         r.handle,
@@ -661,6 +720,7 @@ export class MarketStore {
         r.contact_kind,
         r.contact_value,
         r.client_box_pk,
+        r.ai_lines?.length ? JSON.stringify(r.ai_lines) : null,
         at,
         at,
       );
@@ -765,6 +825,15 @@ export class MarketStore {
         .prepare('SELECT * FROM market_request_deals WHERE request_handle = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
         .get(requestHandle) as Row | undefined,
     );
+  }
+
+  /** Every deal made from this request, newest first. */
+  linksOf(requestHandle: string): LinkRow[] {
+    return (
+      this.db
+        .prepare('SELECT * FROM market_request_deals WHERE request_handle = ? ORDER BY created_at DESC, rowid DESC')
+        .all(requestHandle) as Row[]
+    ).map((r) => this.linkRow(r)!);
   }
 
   /** Not yet final links, least recently checked first. */
@@ -879,6 +948,11 @@ export class MarketStore {
     return Number(res.changes) > 0;
   }
 
+  /** The proof no longer holds (the account lost its mark): the current key can cancel again. */
+  dropResetProof(resetId: string): void {
+    this.db.prepare('UPDATE market_key_resets SET proof = NULL WHERE reset_id = ?').run(resetId);
+  }
+
   /** false if it is not in progress any more. */
   cancelReset(resetId: string, by: 'operator' | 'owner_key'): boolean {
     const res = this.db
@@ -935,6 +1009,140 @@ export class MarketStore {
       }
     }
     return done;
+  }
+
+  // ------------------------------------------------------------ verified accounts
+
+  private accountRow(r: Row | undefined): AccountRow | null {
+    if (!r) return null;
+    return {
+      account_id: r.account_id as string,
+      profile_id: r.profile_id as string,
+      platform: r.platform as string,
+      url: r.url as string,
+      handle: r.handle as string,
+      code: r.code as string,
+      status: r.status as AccountStatus,
+      method: r.method === 'auto' || r.method === 'operator' ? r.method : null,
+      created_at: r.created_at as string,
+      confirmed_at: (r.confirmed_at as string | null) ?? null,
+      checked_ms: Number(r.checked_ms),
+      last_result: (r.last_result as string | null) ?? null,
+      misses: Number(r.misses),
+      lost_at: (r.lost_at as string | null) ?? null,
+    };
+  }
+
+  accountsOf(profileId: string): AccountRow[] {
+    return (this.db.prepare('SELECT * FROM market_accounts WHERE profile_id = ? ORDER BY created_at, rowid').all(profileId) as Row[]).map(
+      (r) => this.accountRow(r)!,
+    );
+  }
+
+  getAccount(accountId: string): AccountRow | null {
+    return this.accountRow(this.db.prepare('SELECT * FROM market_accounts WHERE account_id = ?').get(accountId) as Row | undefined);
+  }
+
+  accountByUrl(profileId: string, url: string): AccountRow | null {
+    return this.accountRow(this.db.prepare('SELECT * FROM market_accounts WHERE profile_id = ? AND url = ?').get(profileId, url) as Row | undefined);
+  }
+
+  insertAccount(a: Pick<AccountRow, 'account_id' | 'profile_id' | 'platform' | 'url' | 'handle' | 'code'>): AccountRow {
+    this.db
+      .prepare(
+        `INSERT INTO market_accounts (account_id, profile_id, platform, url, handle, code, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?)`,
+      )
+      .run(a.account_id, a.profile_id, a.platform, a.url, a.handle, a.code, this.iso());
+    return this.getAccount(a.account_id)!;
+  }
+
+  deleteAccount(accountId: string): boolean {
+    return Number(this.db.prepare('DELETE FROM market_accounts WHERE account_id = ?').run(accountId).changes) > 0;
+  }
+
+  /**
+   * Stores one read of the page and moves the status:
+   * found -> confirmed (method "auto" unless it was confirmed by hand before);
+   * absent -> a confirmed mark goes after 2 reads in a row; a waiting one stays waiting;
+   * unreadable / manual -> a waiting account goes to "review" (the team); a confirmed one keeps its mark.
+   */
+  recordCheck(accountId: string, result: string): AccountRow | null {
+    const a = this.getAccount(accountId);
+    if (!a) return null;
+    const t = this.now();
+    const at = new Date(t).toISOString();
+    let { status, method, misses } = a;
+    let confirmedAt = a.confirmed_at;
+    let lostAt = a.lost_at;
+    if (result === 'found') {
+      if (status !== 'confirmed') {
+        status = 'confirmed';
+        method = 'auto';
+        confirmedAt = at;
+        lostAt = null;
+      }
+      misses = 0;
+    } else if (result === 'absent') {
+      if (status === 'confirmed') {
+        misses += 1;
+        if (misses >= 2) {
+          status = 'lost';
+          lostAt = at;
+        }
+      } else if (status === 'review') status = 'waiting';
+    } else if ((result === 'unreadable' || result === 'manual') && (status === 'waiting' || status === 'lost')) {
+      status = 'review';
+    }
+    this.db
+      .prepare(
+        `UPDATE market_accounts SET status = ?, method = ?, misses = ?, confirmed_at = ?, lost_at = ?, checked_ms = ?, last_result = ? WHERE account_id = ?`,
+      )
+      .run(status, method, misses, confirmedAt, lostAt, t, result, accountId);
+    return this.getAccount(accountId);
+  }
+
+  /** The operator opened the account and saw the code (X, or a page the site could not read). */
+  confirmByOperator(accountId: string): boolean {
+    const at = this.iso();
+    const res = this.db
+      .prepare(
+        `UPDATE market_accounts SET status = 'confirmed', method = 'operator', confirmed_at = ?, lost_at = NULL, misses = 0, checked_ms = ?, last_result = 'operator'
+         WHERE account_id = ?`,
+      )
+      .run(at, this.now(), accountId);
+    return Number(res.changes) > 0;
+  }
+
+  /** The operator saw the code is gone (or the account changed hands): the mark goes. */
+  markLost(accountId: string): boolean {
+    const at = this.iso();
+    const res = this.db
+      .prepare(`UPDATE market_accounts SET status = 'lost', lost_at = ?, checked_ms = ?, last_result = 'operator-lost' WHERE account_id = ?`)
+      .run(at, this.now(), accountId);
+    return Number(res.changes) > 0;
+  }
+
+  /** Confirmed accounts of readable platforms last read before `beforeMs` (oldest first). */
+  accountsToRecheck(platforms: readonly string[], beforeMs: number, limit: number): AccountRow[] {
+    if (!platforms.length) return [];
+    const marks = platforms.map(() => '?').join(', ');
+    return (
+      this.db
+        .prepare(`SELECT * FROM market_accounts WHERE status = 'confirmed' AND platform IN (${marks}) AND checked_ms < ? ORDER BY checked_ms LIMIT ?`)
+        .all(...platforms, beforeMs, limit) as Row[]
+    ).map((r) => this.accountRow(r)!);
+  }
+
+  /** Accounts with this status (the log for ops/accounts.sh), least recently read first. */
+  accountsByStatus(status: AccountStatus, limit = 200): AccountRow[] {
+    return (this.db.prepare('SELECT * FROM market_accounts WHERE status = ? ORDER BY checked_ms, rowid LIMIT ?').all(status, limit) as Row[]).map(
+      (r) => this.accountRow(r)!,
+    );
+  }
+
+  allAccounts(limit = 500): AccountRow[] {
+    return (this.db.prepare('SELECT * FROM market_accounts ORDER BY created_at DESC, rowid DESC LIMIT ?').all(limit) as Row[]).map((r) => this.accountRow(r)!);
   }
 
   // ------------------------------------------------------------ reviews

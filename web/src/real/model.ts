@@ -15,7 +15,7 @@ import { checkedCreator } from '../lib/market';
 function creatorOf(d: LoadedDeal): DealInfo['creator'] {
   if (d.role === 'creator' || d.role === 'stranger') return null;
   const c = checkedCreator(d.handle, d.offer.creator_pk);
-  return c ? { nick: c.nickname, profileUrl: `/creators/${c.profileId}` } : null;
+  return c ? { nick: c.nickname, profileUrl: `/creators/${c.profileId}`, profileId: c.profileId } : null;
 }
 
 export function dealInfo(d: LoadedDeal): DealInfo {

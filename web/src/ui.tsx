@@ -249,6 +249,8 @@ export function explain(e: unknown): string {
         return t.outOfDate;
       case 'too_early':
         return t.tooEarly;
+      case 'deal_live':
+        return t.dealLive;
       case 'join_in_progress':
         return t.duplicate;
     }

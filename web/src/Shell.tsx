@@ -146,7 +146,7 @@ export function Shell({ children, bleed = false }: { children: ReactNode; bleed?
         <p>{rich(t.realLink, { url: <code>{`${window.location.origin}/d#`}</code> })}</p>
         {SUPPORT_CONTACT && <p>{t.support(SUPPORT_CONTACT)}</p>}
         <p>
-          <a href="/status">{t.statusLink}</a> · <a href="/disputes">{t.disputesLink}</a>
+          <a href="/status">{t.statusLink}</a> · <a href="/disputes">{t.disputesLink}</a> · <a href="/key-resets">{dict.market.resets.link}</a>
         </p>
       </footer>
     </div>

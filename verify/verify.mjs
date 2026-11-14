@@ -15,8 +15,8 @@
 //
 // Options (after `npm run verify --`):
 //   --contract <account>   contract to check on mainnet (default: the final
-//                          contract from verify/mainnet-txs.json, or the TEST
-//                          instance while the final one is a placeholder)
+//                          contract escrow.pinkydeals.near; the deleted TEST
+//                          instance 9e537c21… is checked from archival history)
 //   --build auto|reproducible|local|none   how to get the local wasm
 //                          (auto = reproducible if docker is available, else local)
 //   --wasm <file>          compare this wasm instead of building one
@@ -34,7 +34,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONTRACT_DIR = join(ROOT, "contract");
 const DATA = JSON.parse(readFileSync(join(ROOT, "verify", "mainnet-txs.json"), "utf8"));
 const TEST_ID = "9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c";
-const FINAL_ID = "FINAL_CONTRACT_ID"; // placeholder until the key-less final contract is deployed
+const FINAL_ID = "escrow.pinkydeals.near"; // the release contract, deployed 2026-11-13
 const USDC = "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
 const RPC = (process.env.NEAR_RPC || "https://rpc.mainnet.fastnear.com,https://near.drpc.org").split(",");
 const ARCHIVAL = (process.env.NEAR_ARCHIVAL_RPC || "https://archival-rpc.mainnet.fastnear.com").split(",");
@@ -47,9 +47,11 @@ const opt = (name, dflt) => {
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : dflt;
 };
 const flag = (name) => argv.includes(`--${name}`);
-const finalPlaceholder = FINAL_ID === "FINAL_CONTRACT_ID";
-const contractId = opt("contract", finalPlaceholder ? TEST_ID : FINAL_ID);
+const contractId = opt("contract", FINAL_ID);
 const isTest = contractId === TEST_ID;
+// A contract account that was deleted after its tests: its history is read from
+// an archival node at the last block before the deletion.
+const historyBlock = DATA.contracts[contractId]?.deleted_at_block ? DATA.contracts[contractId].deleted_at_block - 1 : null;
 const buildMode = opt("build", "auto");
 const wasmArg = opt("wasm", null);
 
@@ -128,13 +130,18 @@ async function rpc(method, params, urls = RPC) {
 }
 
 async function view(account, method, args = {}) {
-  const r = await rpc("query", {
-    request_type: "call_function",
-    finality: "final",
-    account_id: account,
-    method_name: method,
-    args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
-  });
+  const at = account === contractId && historyBlock !== null ? { block_id: historyBlock } : { finality: "final" };
+  const r = await rpc(
+    "query",
+    {
+      request_type: "call_function",
+      ...at,
+      account_id: account,
+      method_name: method,
+      args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
+    },
+    historyBlock !== null ? ARCHIVAL : RPC,
+  );
   return JSON.parse(Buffer.from(r.result).toString());
 }
 
@@ -198,11 +205,22 @@ function localWasm() {
 
 async function partB() {
   line(`\n=== Part B: read-only mainnet checks for ${contractId} ===`);
-  line(isTest ? "Target: the TEST instance (short periods, has a full-access key). The final key-less contract is not deployed yet (placeholder FINAL_CONTRACT_ID)." : "Target: the FINAL contract (must have no full-access keys and match the repo build).");
+  line(isTest ? "Target: the TEST instance (short periods, used for our first live deals, deleted after the tests)." : "Target: the FINAL contract (must have no full-access keys and match the repo build).");
   line(`Explorer: ${EXPLORER}/address/${contractId}`);
   const entry = DATA.contracts[contractId];
 
   // 1. account + code hash
+  if (historyBlock !== null) {
+    // Deleted after its tests: only the history is checked (archival node, last block before the deletion).
+    try {
+      await rpc("query", { request_type: "view_account", finality: "final", account_id: contractId });
+      check("FAIL", "account is listed as deleted but still exists", contractId);
+    } catch {
+      check("INFO", `account deleted after its tests (block ${entry.deleted_at_block}); history read from an archival node at block ${historyBlock}`, entry.kind);
+    }
+    await historyChecks(entry);
+    return;
+  }
   let account;
   try {
     account = await rpc("query", { request_type: "view_account", finality: "final", account_id: contractId });
@@ -212,9 +230,27 @@ async function partB() {
   }
   check("PASS", "contract account exists on mainnet", `code_hash ${account.code_hash}, storage ${account.storage_usage} B`);
 
-  // 2. reproducible build vs code hash
-  const built = localWasm();
-  if (!built) {
+  // 2. reproducible build vs code hash. The wasm carries the git commit it
+  // was built from, so a byte-exact rebuild needs a checkout of exactly that commit.
+  let builtFrom = null;
+  try {
+    builtFrom = (await view(contractId, "contract_source_metadata"))?.build_info?.source_code_snapshot?.match(/rev=([0-9a-f]{40})/)?.[1] ?? null;
+  } catch {
+    /* older builds expose no metadata */
+  }
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout?.trim() || null;
+  const wrongCommit = !wasmArg && buildMode !== "none" && builtFrom && head && head !== builtFrom;
+  const built = wrongCommit ? null : localWasm();
+  if (wrongCommit) {
+    check(
+      "INFO",
+      "code hash vs local build: skipped, this checkout is at another commit",
+      `the contract was built from commit ${builtFrom}; this checkout is at ${head}.\n` +
+        `For the byte-exact check (needs docker) run:\n` +
+        `  git checkout ${builtFrom.slice(0, 7)} && npm run verify -- --skip-sandbox --contract ${contractId} --build reproducible\n` +
+        `or by hand: git checkout ${builtFrom.slice(0, 7)} && cd contract && cargo near build reproducible-wasm && sha256sum target/near/escrow.wasm`,
+    );
+  } else if (!built) {
     check("INFO", "code hash vs local build", "skipped (--build none)");
   } else if (built.error) {
     check(isTest ? "INFO" : "FAIL", "code hash vs local build", built.error);
@@ -271,6 +307,11 @@ async function partB() {
     check("FAIL", "get_config", e.message);
   }
 
+  await historyChecks(entry);
+}
+
+/** Listed deal transactions, their deal-key signatures and the deal outcomes. */
+async function historyChecks(entry) {
   // 5. listed transactions
   if (!entry || entry.txs.length === 0) {
     check(isTest ? "FAIL" : "INFO", "deal transactions", `no transactions listed for ${contractId} in verify/mainnet-txs.json`);
@@ -369,5 +410,4 @@ if (!flag("skip-mainnet")) await partB();
 const fails = results.filter((r) => r.status === "FAIL");
 const counts = ["PASS", "INFO", "FAIL"].map((s) => `${s.toLowerCase()}=${results.filter((r) => r.status === s).length}`).join(" ");
 line(`\nVERIFY_RESULT ${fails.length === 0 ? "OK" : "FAILED"} ${counts} contract=${contractId}${isTest ? " (TEST instance)" : ""}`);
-if (finalPlaceholder) line("Note: FINAL_CONTRACT_ID is still a placeholder; rerun with --contract <final id> after it is deployed.");
 process.exit(fails.length === 0 ? 0 : 1);

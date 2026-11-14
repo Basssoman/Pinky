@@ -9,11 +9,20 @@
 // domains, e-mails and @names in the text are broken up before sending.
 // The operator hides things with the existing tools (scripts/market-admin.ts);
 // scripts/reports.ts lists the open reports and says which command hides what.
+//
+// Weekly volume alert: when the paid deals made from requests to ONE creator
+// profile pass VOLUME_ALERT_USDC (default $10,000) in a rolling 7 days, the
+// same chat gets ONE message (or the server log a warning line when the chat
+// is not set). Nothing is blocked: the team checks by hand. The same profile
+// is not alerted again for 7 days (kept in the database, so a restart does
+// not repeat it). "Paid" is read from the chain: the deal's funding time must
+// be inside the window.
 
 import { DatabaseSync } from 'node:sqlite';
 
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 
+import type { Chain } from './chain.ts';
 import type { Config } from './config.ts';
 import { HttpError } from './errors.ts';
 import { ipKey, ipPrefix, RateLimiter } from './guards.ts';
@@ -168,6 +177,84 @@ export function siteOrigin(corsOrigin: string): string | null {
   return null;
 }
 
+// ---------------------------------------------------------------- weekly volume alert
+
+/** The rolling window of the volume alert, and the quiet time per profile after an alert. */
+export const VOLUME_WINDOW_MS = 7 * DAY;
+/** How often the server sums the volume. */
+export const VOLUME_CHECK_MS = 15 * MIN;
+/** USDC has 6 decimals; deal amounts are in its smallest units. */
+const USDC_UNIT = 1_000_000n;
+/** Funding can come a little after the join: joins this much before the window are still looked at. */
+const JOIN_SLACK_MS = DAY;
+
+export interface VolumeAlert {
+  profile_id: string;
+  /** Paid volume in the window, smallest USDC units. */
+  volume: bigint;
+  deals: number;
+}
+
+/** Whole dollars with thousands separators: 12345678901n -> "12,345". */
+export const usdWhole = (units: bigint) => (units / USDC_UNIT).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/** The one operator message about a profile's weekly volume. Our own site link only; no names, no deal details. */
+export function volumeMessage(a: VolumeAlert & { link: string | null; threshold: bigint }): string {
+  return [
+    `Pinky volume alert: one creator profile got about $${usdWhole(a.volume)} in paid deals from requests in the last 7 days (${a.deals} deals; alert level $${usdWhole(a.threshold)}).`,
+    a.link ? `Profile: ${a.link}` : `Profile id: ${a.profile_id}`,
+    `Nothing is blocked. Please check it by hand. To hide the profile: node dist/scripts/market-admin.js hide ${a.profile_id}`,
+    'No new alert about this profile for 7 days.',
+  ].join('\n');
+}
+
+/** When each profile was last alerted (so the same profile is not alerted again within the window). */
+export class VolumeAlertStore {
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS volume_alerts (
+        profile_id TEXT PRIMARY KEY,
+        alerted_ms INTEGER NOT NULL
+      );
+    `);
+  }
+
+  lastAlert(profileId: string): number | null {
+    const r = this.db.prepare('SELECT alerted_ms FROM volume_alerts WHERE profile_id = ?').get(profileId) as { alerted_ms: number } | undefined;
+    return r ? Number(r.alerted_ms) : null;
+  }
+
+  mark(profileId: string, atMs: number): void {
+    this.db
+      .prepare('INSERT INTO volume_alerts (profile_id, alerted_ms) VALUES (?, ?) ON CONFLICT (profile_id) DO UPDATE SET alerted_ms = excluded.alerted_ms')
+      .run(profileId, atMs);
+  }
+
+  /**
+   * Deals made from requests that a client joined since `sinceIso`: profile,
+   * on-chain id, agreed amount. Reads the marketplace link table and the deals
+   * table of the same database (read only).
+   */
+  recentLinkedDeals(sinceIso: string): { profile_id: string; deal_id: number; amount: string }[] {
+    let rows: Record<string, unknown>[];
+    try {
+      rows = this.db
+        .prepare(
+          `SELECT l.profile_id AS profile_id, d.deal_id AS deal_id, d.amount AS amount
+             FROM market_request_deals l JOIN deals d ON d.handle = l.deal_handle
+            WHERE d.deal_id IS NOT NULL AND d.joined_at >= ?`,
+        )
+        .all(sinceIso) as Record<string, unknown>[];
+    } catch {
+      return []; // a database without the marketplace tables
+    }
+    return rows.map((r) => ({ profile_id: String(r.profile_id), deal_id: Number(r.deal_id), amount: String(r.amount) }));
+  }
+}
+
 // ---------------------------------------------------------------- route
 
 export interface ReportsDeps {
@@ -179,9 +266,17 @@ export interface ReportsDeps {
   log: FastifyBaseLogger;
   /** Tests pass a fake. */
   telegram?: TelegramApi;
+  /** For the weekly volume alert (funding times); without it there is no volume alert. */
+  chain?: Pick<Chain, 'getDeal'>;
 }
 
-export function registerReports(app: FastifyInstance, deps: ReportsDeps): { store: ReportStore } {
+export interface Reports {
+  store: ReportStore;
+  /** One pass of the weekly volume alert; returns the alerts it raised. */
+  checkVolume(): Promise<VolumeAlert[]>;
+}
+
+export function registerReports(app: FastifyInstance, deps: ReportsDeps): Reports {
   const { config, market: ms, now, log } = deps;
   const db = (deps.store as { db?: DatabaseSync }).db ?? new DatabaseSync(':memory:');
   const rs = new ReportStore(db, now);
@@ -259,5 +354,95 @@ export function registerReports(app: FastifyInstance, deps: ReportsDeps): { stor
     return { ok: true };
   });
 
-  return { store: rs };
+  // ------------------------------------------------------------ weekly volume alert
+
+  const vs = new VolumeAlertStore(db);
+  const threshold = BigInt(Math.max(0, config.volumeAlertUsdc)) * USDC_UNIT;
+  /** Funding facts never change once a deal is funded: each funded deal is read from the chain once. */
+  const funded = new Map<number, { at_ms: number; amount: bigint }>();
+  let checking = false;
+
+  async function fundingOf(chain: Pick<Chain, 'getDeal'>, dealId: number): Promise<{ at_ms: number; amount: bigint } | null> {
+    const known = funded.get(dealId);
+    if (known) return known;
+    try {
+      const deal = await chain.getDeal(dealId);
+      if (!deal?.funded_at_ns) return null;
+      const paid = BigInt(deal.funded_amount || '0');
+      const f = { at_ms: Number(BigInt(deal.funded_at_ns) / 1_000_000n), amount: paid > 0n ? paid : BigInt(deal.amount) };
+      funded.set(dealId, f);
+      return f;
+    } catch {
+      return null; // chain unreachable: this deal counts on a later pass
+    }
+  }
+
+  async function checkVolume(): Promise<VolumeAlert[]> {
+    const chain = deps.chain;
+    if (!chain || threshold <= 0n || checking) return [];
+    checking = true;
+    try {
+      const t = now();
+      const since = t - VOLUME_WINDOW_MS;
+      for (const [id, f] of funded) if (f.at_ms < since) funded.delete(id);
+      // Cheap first pass on the agreed amounts: only profiles that could be over the level are read from the chain.
+      const byProfile = new Map<string, { deal_id: number; amount: bigint }[]>();
+      for (const r of vs.recentLinkedDeals(new Date(since - JOIN_SLACK_MS).toISOString())) {
+        if (!/^\d{1,30}$/.test(r.amount)) continue;
+        const list = byProfile.get(r.profile_id) ?? [];
+        list.push({ deal_id: r.deal_id, amount: BigInt(r.amount) });
+        byProfile.set(r.profile_id, list);
+      }
+      const raised: VolumeAlert[] = [];
+      for (const [profileId, deals] of byProfile) {
+        if (deals.reduce((s, d) => s + d.amount, 0n) < threshold) continue;
+        const last = vs.lastAlert(profileId);
+        if (last !== null && t - last < VOLUME_WINDOW_MS) continue;
+        let volume = 0n;
+        let count = 0;
+        for (const d of deals) {
+          const f = await fundingOf(chain, d.deal_id);
+          if (f && f.at_ms >= since) {
+            volume += f.amount;
+            count++;
+          }
+        }
+        if (volume < threshold) continue;
+        const alert: VolumeAlert = { profile_id: profileId, volume, deals: count };
+        let told = false;
+        if (tg) {
+          // Shares the hourly cap with the reports; when it is full, the alert waits for the next pass.
+          if (!perHour.take('chat', CHAT_MESSAGES_PER_HOUR)) continue;
+          try {
+            await tg.sendMessage(chatId, volumeMessage({ ...alert, link: site ? `${site}/creators/${profileId}` : null, threshold }));
+            told = true;
+          } catch (e) {
+            log.warn({ err: { name: (e as Error).name, status: (e as TelegramError).status } }, 'volume alert to the operator chat failed');
+          }
+        }
+        if (!told) {
+          // No chat set (or Telegram failed): the server log keeps the alert.
+          log.warn(
+            { profile_id: profileId, volume_usdc: Number(volume / USDC_UNIT), deals: count, alert_usdc: config.volumeAlertUsdc },
+            'weekly paid volume of one creator profile is above the alert level (deals from requests, last 7 days); check by hand',
+          );
+        }
+        vs.mark(profileId, t);
+        raised.push(alert);
+      }
+      return raised;
+    } finally {
+      checking = false;
+    }
+  }
+
+  if (deps.chain && threshold > 0n) {
+    const timer = setInterval(() => {
+      void checkVolume().catch(() => log.warn('volume alert check failed'));
+    }, VOLUME_CHECK_MS);
+    timer.unref();
+    app.addHook('onClose', async () => clearInterval(timer));
+  }
+
+  return { store: rs, checkVolume };
 }

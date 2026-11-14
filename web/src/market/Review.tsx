@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { locale, useT } from '../i18n';
 import type { LoadedDeal } from '../lib/flows';
-import { LIMITS, reviewable, signReview, type PublicReview, type ReviewLink } from '../lib/market';
+import { LIMITS, reviewable, signReview, signReviewOpen, type PublicReview, type ReviewLink } from '../lib/market';
 import { getCtx, navigate } from '../real/ctx';
 import { useRun } from '../ui';
 import { market } from './ctx';
@@ -16,19 +16,31 @@ import { Go, MarketProblem, OutcomeLabel } from './parts';
 export function ReviewBlock({ d }: { d: LoadedDeal }) {
   const [link, setLink] = useState<ReviewLink | null>(null);
   const ok = reviewable(d);
+  const dealId = d.deal?.id ?? null;
+  const key = d.key;
   useEffect(() => {
     if (!ok) return;
     let alive = true;
-    market()
-      .then((api) => api.reviewLink(d.handle, d.token))
-      .then((l) => alive && setLink(l))
-      .catch(() => {
-        /* no block when the server does not answer */
-      });
+    (async () => {
+      const api = await market();
+      let l = await api.reviewLink(d.handle, d.token);
+      // The deal ended by itself: this first open (signed by this browser's client key) starts the 3 days.
+      if (l.starts_on_open && key && dealId !== null) {
+        try {
+          await api.openReview(d.handle, d.token, signReviewOpen(getCtx().net.contractId, key, dealId, Date.now()));
+          l = await api.reviewLink(d.handle, d.token);
+        } catch {
+          /* the window then runs to its latest end; the review still works */
+        }
+      }
+      if (alive) setLink(l);
+    })().catch(() => {
+      /* no block when the server does not answer */
+    });
     return () => {
       alive = false;
     };
-  }, [ok, d.handle, d.token]);
+  }, [ok, d.handle, d.token, key, dealId]);
 
   // This browser's own chain read decides (`ok`). The server's `can_review` may lag a few minutes behind the chain
   // (it re-reads it now and then); its POST always re-reads the chain, so a stale "false" must not hide the block.

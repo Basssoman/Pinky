@@ -585,6 +585,7 @@ export const fr: Dict = {
     deliverTitle: 'Livrer le travail',
     deliverHint: (when) =>
       `Livrez avant ${le(when)} dans tous les cas : après le délai, le client peut récupérer l’argent. Les retouches se font avant la livraison.`,
+    draftTip: 'Envoyez les brouillons dans votre messagerie avec un filigrane ou en basse qualité. La version complète, seulement ici, via la transaction.',
     filesLink: 'Lien vers les fichiers finaux',
     filesLinkPlaceholder: 'Google Drive, Dropbox, WeTransfer…',
     filesLinkHint: 'Seuls vous et le client pouvez l’ouvrir. Il est chiffré, même nous ne pouvons pas le lire.',
@@ -755,6 +756,7 @@ export const fr: Dict = {
     wrongKey: 'La clé de ce navigateur ne peut pas faire cette étape de la transaction.',
     outOfDate: 'Quelque chose n’est plus à jour. Réessayez une fois.',
     tooEarly: 'C’est trop tôt. Attendez la fin du délai de la transaction.',
+    dealLive: 'Cette demande a déjà une transaction qui peut encore être payée. Annulez d’abord ce lien, puis créez une nouvelle transaction.',
     movedOn: 'La transaction a changé entre-temps. Rechargez la page pour voir où elle en est.',
     deliveryPassed: 'Le délai de livraison est dépassé.',
     reviewOver: 'Le délai de vérification est terminé.',

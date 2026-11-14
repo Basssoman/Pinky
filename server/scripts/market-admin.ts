@@ -1,5 +1,5 @@
-// Operator tool for the marketplace: hide a profile
-// or a review. Edits the server's SQLite DB directly; there is no public admin
+// Operator tool for the marketplace ("Operator can hide a profile
+// or review"). Edits the server's SQLite DB directly; there is no public admin
 // route. Safe while the server runs (SQLite WAL + busy timeout).
 //
 //   hide <profile_id>            hide a profile from the catalog and its page

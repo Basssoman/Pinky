@@ -98,6 +98,21 @@ reported + the exact hide command), `close <id> [all]`. Hide with
 `node dist/scripts/market-admin.js hide <profile_id>` or
 `hide-review <deal_handle>` (on the hosted API: inside the app container).
 
+Weekly volume alert (same chat, same bot): every 15 minutes the server sums,
+per creator profile, the deals made from requests that were PAID (funding
+time read from the chain) in the last 7 days. Above `VOLUME_ALERT_USDC`
+(default 10,000) the chat gets ONE message: the amount, the number of deals,
+the profile page on our site and the hide command. Nothing is blocked; the
+team checks by hand. The same profile is not alerted again for 7 days (table
+`volume_alerts`, survives a restart). Without `TELEGRAM_REPORTS_CHAT_ID` (or
+when Telegram fails) the alert is a `warn` line in the server log instead.
+Plain deals (not from a request) are not counted.
+
+Split proposals: when one party publishes a signed split ("work it out"),
+the other party's confirmed Telegram chats get one fixed message "your deal
+has a new proposal, answer by <time> (UTC)" — no amount, share, title or
+link; at most one such message per chat and deal per hour.
+
 ## Environment
 
 Loaded from real env vars, then `$ENV_FILE`, `server/.env`, then the repository
@@ -151,9 +166,10 @@ root `.env` (first non-empty value wins). Secrets are never logged.
 | `ACCOUNT_RECHECK_HOURS` | `24` | marketplace: re-read the bios of confirmed creator accounts (YouTube / Behance) this often; the mark goes when the code is gone; `0` = off |
 | `REVIEW_WINDOW_SECONDS` | `259200` (3 days) | a review can be written or edited this long after the deal ended on-chain, then it is locked |
 | `NEARAI_API_KEY` | — | AI brief helper on NEAR AI Cloud; empty = off (the site hides the button). Never sent to the browser |
-| `NEARAI_BASE_URL` / `NEARAI_MODEL` | `https://cloud-api.near.ai/v1` / `z-ai/glm-5.3-flash` | NEAR AI endpoint and a PRIVATE (TEE) model |
+| `NEARAI_BASE_URL` / `NEARAI_MODEL` | `https://cloud-api.near.ai/v1` / `Qwen/Qwen3.8-27B` | NEAR AI endpoint and a PRIVATE (TEE) model |
 | `RATE_BRIEF_PER_MIN` / `BRIEF_PER_DAY` | `3` / `30` | brief helper calls per IP per minute / per network per day |
 | `TELEGRAM_REPORTS_CHAT_ID` | — | Telegram chat id (a number; groups are negative) for "Report" messages from our bot; needs `TELEGRAM_BOT_TOKEN`. Empty = reports are only stored. Get it with `/chatid` sent to the bot |
+| `VOLUME_ALERT_USDC` | `10000` | weekly volume alert: paid deals from requests to ONE creator profile above this many USDC in a rolling 7 days → one message to `TELEGRAM_REPORTS_CHAT_ID` (or a server log warning); not repeated for that profile for 7 days; never blocks anything; `0` = off |
 | `LOG_LEVEL` | `info` | request logs contain method/url/status only |
 
 ## Deploy checklist (contract side, not automated here)

@@ -576,6 +576,7 @@ export const tr: Dict = {
     deliverTitle: 'İşi teslim edin',
     deliverHint: (when) =>
       `Her durumda ${when} tarihine kadar teslim edin: süre dolduktan sonra müşteri parayı geri alabilir. Revizyonlar teslimden önce yapılır.`,
+    draftTip: 'Taslakları mesajlaşma uygulamasında filigranlı ya da düşük kalitede gönderin. Tam sürümü yalnızca burada, anlaşma üzerinden gönderin.',
     filesLink: 'Son dosyaların bağlantısı',
     filesLinkPlaceholder: 'Google Drive, Dropbox, WeTransfer…',
     filesLinkHint: 'Yalnızca siz ve müşteri açabilir. Şifrelidir, biz bile okuyamayız.',
@@ -745,6 +746,7 @@ export const tr: Dict = {
     wrongKey: 'Bu tarayıcıdaki anahtar anlaşmanın bu adımını yapamaz.',
     outOfDate: 'Bir şeyin süresi geçti. Bir kez daha deneyin.',
     tooEarly: 'Bunun için henüz erken. Anlaşmadaki süre bitene kadar bekleyin.',
+    dealLive: 'Bu talebin hâlâ ödenebilecek bir anlaşması var. Önce o bağlantıyı iptal edin, sonra yeni bir anlaşma yapın.',
     movedOn: 'Anlaşma bu arada değişti. Şu anki durumunu görmek için sayfayı yenileyin.',
     deliveryPassed: 'Teslim süresi geçti.',
     reviewOver: 'İnceleme süresi bitti.',

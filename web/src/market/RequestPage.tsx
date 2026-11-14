@@ -7,6 +7,10 @@
 // signature over (this request, the deal's key), against the key it pinned
 // when the request was sent. A changed key or a bad
 // signature: a big warning and no way to the deal from here.
+//
+// One live deal per request: deals the creator made from it before the one
+// shown (replaced, cancelled, expired) are listed as "not valid, don't pay",
+// with the start of each link so the client can match it with what they got.
 import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../i18n';
 import { ApiError } from '../lib/api';
@@ -20,6 +24,7 @@ import {
   parseRequestPin,
   rememberCheckedCreator,
   requestLink,
+  type OldDeal,
   type RequestStatus,
   type RequestView,
 } from '../lib/market';
@@ -171,6 +176,10 @@ export function RequestPage({ token }: { token: string }) {
             </div>
           )}
 
+          {view.old_deals && view.old_deals.length > 0 && (
+            <OldDeals deals={view.old_deals} token={token} handle={handle} current={view.status === 'deal_ready'} />
+          )}
+
           <div className={justSent ? 'panel mk-keep mk-keep-new' : 'panel mk-keep'}>
             <p className="panel-title">{t.keep}</p>
             <div className="address">
@@ -232,6 +241,48 @@ export function RequestPage({ token }: { token: string }) {
         </section>
       </div>
     </main>
+  );
+}
+
+/** Older deals of this request: never to be paid. Each link is opened here only to show how it starts. */
+function OldDeals({ deals, token, handle, current }: { deals: OldDeal[]; token: string; handle: string; current: boolean }) {
+  const t = useT().market.request;
+  const [starts, setStarts] = useState<(string | null)[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void Promise.all(deals.map((d) => (d.deal_link_box ? dealTokenFrom(token, handle, { deal_link_box: d.deal_link_box }) : Promise.resolve(null)))).then(
+      (tokens) => alive && setStarts(tokens.map((x) => (x ? x.slice(0, 8) : null))),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [deals, token, handle]);
+  return (
+    <div className="panel mk-old-deals" role="note" aria-labelledby="old-deals-title">
+      <p className="panel-title" id="old-deals-title">
+        {t.oldTitle}
+      </p>
+      <p className="hint">
+        <strong>{current ? t.oldLine : t.oldNoneLine}</strong>
+      </p>
+      <ul className="mk-old-list">
+        {deals.map((d, i) => (
+          <li key={i}>
+            <span className="mk-status mk-status-old">{t.oldBadge}</span>
+            <span>
+              {dayName(d.made_on)}
+              {d.title && <> · {d.title}</>}
+              {d.amount_usdc && <> · {d.amount_usdc} USDC</>}
+            </span>
+            {starts[i] && (
+              <span className="mk-dim">
+                {t.oldLink} <code>/d#{starts[i]}…</code>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

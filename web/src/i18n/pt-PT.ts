@@ -578,6 +578,7 @@ export const ptPT: Dict = {
     deliverTitle: 'Entregar o trabalho',
     deliverHint: (when) =>
       `Entrega até ${when} em qualquer caso: depois do prazo, o cliente pode recuperar o dinheiro. As alterações fazem-se antes da entrega.`,
+    draftTip: 'Envie os rascunhos pelo seu mensageiro com marca de água ou em baixa qualidade. A versão completa, só aqui, através do acordo.',
     filesLink: 'Link dos ficheiros finais',
     filesLinkPlaceholder: 'Google Drive, Dropbox, WeTransfer…',
     filesLinkHint: 'Só tu e o cliente o podem abrir. Está encriptado, nem nós o conseguimos ler.',
@@ -748,6 +749,7 @@ export const ptPT: Dict = {
     wrongKey: 'A chave neste navegador não pode dar este passo do acordo.',
     outOfDate: 'Algo ficou desatualizado. Tenta mais uma vez.',
     tooEarly: 'Ainda é cedo para isto. Espera até acabar o prazo do acordo.',
+    dealLive: 'Este pedido já tem um acordo que ainda pode ser pago. Cancela primeiro esse link e depois cria um novo acordo.',
     movedOn: 'O acordo mudou entretanto. Recarrega a página para ver em que ponto está.',
     deliveryPassed: 'O prazo de entrega já passou.',
     reviewOver: 'O tempo de revisão acabou.',

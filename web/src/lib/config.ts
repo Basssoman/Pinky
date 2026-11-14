@@ -24,17 +24,17 @@ export interface Net {
 const MAINNET_USDC = '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
 
 /**
- * TODAY this is the v2 TEST instance (short periods, VERIFY.md "Mainnet
- * facts"). Replace `contractId` and `arbiterNoteKey` with the final ones at
- * the release deploy (final release checklist).
+ * The FINAL release contract `escrow.pinkydeals.near` (deployed 2026-11-13 from
+ * this repository, reproducible build). The v2 TEST instance was
+ * 9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c.
  */
 const MAINNET: Net = {
   name: 'mainnet',
-  contractId: '9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c',
+  contractId: 'escrow.pinkydeals.near',
   usdcAssetId: `nep141:${MAINNET_USDC}`,
   tokenAccountId: MAINNET_USDC,
   oneClickKey: 'ed25519:reYaWhvwu8Jzo3WUM3zhn6VrhuMEF4eADL17qtRVifc',
-  // v2 TEST instance arbiter (made 2026-11-11 with the arbiter tool `init`); replace at the final deploy.
+  // Arbiter bfe910db… (made 2026-11-11 with the arbiter tool `init`); the final contract keeps the same arbiter, so the same key.
   arbiterNoteKey: 'be8a5a374b4a1203a5d8d2ef95a4a49ccd07b0b4669f64fe95a2e5408585b26b',
   // rpc.mainnet.near.org is deprecated (on 2026-11-11 it answered -429 "STOP USING IT"); never put it back.
   rpcUrls: ['https://rpc.mainnet.fastnear.com', 'https://near.drpc.org', 'https://1rpc.io/near'],

@@ -22,6 +22,7 @@ import { registerMarket } from './market.ts';
 import { registerNotify } from './notify.ts';
 import { registerReports } from './reports.ts';
 import type { TelegramApi } from './telegram.ts';
+import type { AccountChecker } from './accounts.ts';
 import {
   ACTIONS,
   baseUnitsToUsdc,
@@ -78,6 +79,8 @@ export interface AppDeps {
   sleep?: (ms: number) => Promise<void>;
   /** fetch for the AI brief helper (NEAR AI, NVIDIA NRAS, TDX verifier); tests pass a fake. */
   briefFetch?: typeof fetch;
+  /** Reads creator account bios; default: a separate process per check. Tests pass a fake. */
+  accountChecker?: AccountChecker;
 }
 
 export { HttpError };
@@ -350,13 +353,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   // Marketplace routes: profiles, requests, reviews. Off-chain only.
-  const market = registerMarket(app, { config, chain, store, now, limiter });
+  const market = registerMarket(app, { config, chain, store, now, limiter, accountChecker: deps.accountChecker });
   app.decorate('market', market);
   // Telegram deal notifications. Off without TELEGRAM_BOT_TOKEN + TELEGRAM_BOT_USERNAME.
   const notify = registerNotify(app, { config, chain, store, now, limiter, log: app.log, telegram: deps.telegram, market });
   app.decorate('notify', notify);
   // "Report" button: stored; sent to TELEGRAM_REPORTS_CHAT_ID by our bot when set.
-  const reports = registerReports(app, { config, market: market.store, store, now, log: app.log, telegram: deps.telegram });
+  const reports = registerReports(app, { config, market: market.store, store, now, log: app.log, telegram: deps.telegram, chain });
   app.decorate('reports', reports);
   // AI brief helper on NEAR AI Cloud. Off without NEARAI_API_KEY.
   registerBrief(app, { config, limiter, now, fetch: deps.briefFetch });
@@ -1219,8 +1222,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const problem = precheckSettle(deal, data, nowNs());
     if (problem) throw new HttpError(409, 'precheck_failed', problem);
     store.saveSettleProposal({ handle: rec.handle, signer, payload: body.payload as string, signature: body.signature as string });
+    // The other party's Telegram hears "new proposal, answer by …" (no amounts); never delays or fails this answer.
+    const timerEnd = settleTimerEnd(deal);
+    const expires = BigInt(data.expires_at_ns as string);
+    const answerBy = timerEnd !== null && timerEnd < expires ? timerEnd : expires;
+    void notify.proposal(rec.handle, signer, Number(answerBy / 1_000_000n));
     reply.status(201);
-    return { signer, timer_ends_at_ns: settleTimerEnd(deal)?.toString() ?? null };
+    return { signer, timer_ends_at_ns: timerEnd?.toString() ?? null };
   });
 
   app.get('/api/deals/:handle/settle-proposals', async (req) => {

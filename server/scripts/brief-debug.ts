@@ -18,7 +18,7 @@ for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
 }
 const apiKey = env.NEARAI_API_KEY ?? '';
 const base = (env.NEARAI_BASE_URL || 'https://cloud-api.near.ai/v1').replace(/\/+$/, '');
-const model = process.argv[3] || env.NEARAI_MODEL || 'z-ai/glm-5.3-flash';
+const model = process.argv[3] || env.NEARAI_MODEL || 'Qwen/Qwen3.8-27B';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const t0 = Date.now();
 const log = (step: string, detail = '') => console.log(`[${String(Date.now() - t0).padStart(6)} ms] ${step.padEnd(12)} ${detail}`);

@@ -799,6 +799,79 @@
   border-color: var(--ink);
   color: var(--ink);
 }
+/* Seen = the "new" blue, quieter; in talks = the caution yellow; closed by itself = faint, dashed. */
+.mk-status-viewed {
+  border-color: var(--blue);
+  color: var(--ink-soft);
+}
+.mk-status-discussing {
+  border-color: var(--caution-ink);
+  color: var(--caution-ink);
+}
+.mk-status-closed {
+  border-style: dashed;
+  border-color: var(--rail);
+  color: var(--ink-faint);
+}
+/* Verified accounts (editor list + public marks) */
+.mk-accounts {
+  display: grid;
+  gap: 12px;
+}
+.mk-account-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mk-account {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+.mk-account-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.mk-account-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.mk-account-code code {
+  padding: 4px 8px;
+  background: var(--vault-tint);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.mk-acc-confirmed {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.mk-acc-review {
+  border-color: var(--caution-ink);
+  color: var(--caution-ink);
+}
+.mk-acc-lost {
+  border-style: dashed;
+  border-color: var(--rail);
+  color: var(--ink-faint);
+}
+.mk-account-add {
+  display: grid;
+  gap: 8px;
+}
+.mk-confirmed .mk-check {
+  color: var(--blue);
+}
 .mk-req-brief {
   color: var(--ink-soft);
   font-size: var(--text-sm);
@@ -1134,4 +1207,64 @@
 .mk-report textarea {
   width: 100%;
   resize: vertical;
+}
+
+/* Older deals of a request: not valid, never to be paid (caution colours, like a warning). */
+.mk-old-deals {
+  display: grid;
+  gap: 10px;
+  border: 2px solid var(--caution-ink);
+}
+.mk-old-deals .hint strong {
+  color: var(--caution-ink);
+}
+.mk-old-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.mk-old-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  overflow-wrap: anywhere;
+}
+.mk-status-old {
+  border-color: var(--caution-ink);
+  color: var(--caution-ink);
+}
+
+/* A link the site does not open: plain text, its domain in bold. */
+.mk-link-text {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+}
+.mk-link-text strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Brief lines the AI helper wrote (the creator's inbox). */
+.mk-brief-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mk-brief-lines li {
+  min-height: 1.55em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mk-brief-lines .mk-ai-line {
+  margin-left: -12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--blue);
+}
+.mk-ai-mark {
+  color: var(--blue);
 }

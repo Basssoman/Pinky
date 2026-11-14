@@ -16,6 +16,11 @@
 //   2 of the 3 review days remain and no review was written. Only that
 //   client's row waits for it after the deal is over; it goes with the
 //   reminder, the review or the end of the window, whichever comes first.
+// Split proposals ("work it out"): when one party publishes a signed split,
+//   the OTHER party's confirmed chats get one fixed message right away: "your
+//   deal has a new proposal, answer by <time> (UTC)". No amount, share,
+//   title or link. At most one such message per chat and deal per hour, so a
+//   party cannot flood the other side by re-posting proposals.
 // Off unless TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME are set; then the
 //   bot long-polls Telegram (no public webhook URL needed). Run ONE server
 //   per bot token (Telegram allows one long poller).
@@ -33,7 +38,7 @@ import { linkFacts, reviewUntilMs, type Market } from './market.ts';
 import { ipKey, type RateLimiter } from './guards.ts';
 import { NotifyStore, type NotifySub, type Party, type Seen } from './notify-store.ts';
 import type { DealRecord, Store } from './store.ts';
-import { BOT_TEXTS, botLang, httpTelegram, LOOKS_SECRET, newsText, TelegramError, type NotifyEvent, type TelegramApi, type TgUpdate } from './telegram.ts';
+import { BOT_TEXTS, botLang, httpTelegram, LOOKS_SECRET, newsText, proposalText, TelegramError, type NotifyEvent, type TelegramApi, type TgUpdate } from './telegram.ts';
 
 const SEC_NS = 1_000_000_000n;
 const DAY_NS = 86_400n * SEC_NS;
@@ -43,6 +48,8 @@ const SIGNED_MAX_FUTURE_NS = 30n * SEC_NS;
 const MAX_SUBS_PER_CHAT = 20;
 /** Remind about the review when this much of the 3-day window is left. */
 export const REVIEW_REMIND_MS = 2 * 86_400_000;
+/** Quiet time per chat and deal after a "new proposal" message. */
+export const PROPOSAL_NOTICE_GAP_MS = 3600_000;
 const HANDLE_RE = /^[0-9a-f]{64}$/;
 const CODE_RE = /^[A-Za-z0-9_-]{16,64}$/;
 
@@ -69,6 +76,11 @@ export interface Notify {
   tick(): Promise<void>;
   /** One update from Telegram. */
   handleUpdate(u: TgUpdate): Promise<void>;
+  /**
+   * `signer` published a split proposal that can be answered until `answerByMs`:
+   * tell the other party's confirmed chats. Never throws.
+   */
+  proposal(handle: string, signer: Party, answerByMs: number): Promise<void>;
   store: NotifyStore | null;
 }
 
@@ -279,7 +291,7 @@ export function registerNotify(app: FastifyInstance, deps: NotifyDeps): Notify {
   });
 
   if (!ns || !tg) {
-    return { bot: null, tick: async () => {}, handleUpdate: async () => {}, store: null };
+    return { bot: null, tick: async () => {}, handleUpdate: async () => {}, proposal: async () => {}, store: null };
   }
 
   // ------------------------------------------------------------ bot
@@ -337,6 +349,29 @@ export function registerNotify(app: FastifyInstance, deps: NotifyDeps): Notify {
       return send(chat, BOT_TEXTS[lang].noLinks);
     }
     return send(chat, BOT_TEXTS[lang].help);
+  }
+
+  // ------------------------------------------------------------ split proposals
+
+  const proposalTold = new Map<string, number>(); // chat|handle|party -> ms of the last message
+
+  async function proposal(handle: string, signer: Party, answerByMs: number): Promise<void> {
+    try {
+      const t = now();
+      if (answerByMs <= t) return;
+      for (const [k, at] of proposalTold) if (t - at >= PROPOSAL_NOTICE_GAP_MS) proposalTold.delete(k);
+      const other: Party = signer === 'creator' ? 'client' : 'creator';
+      for (const sub of ns!.subsOf(handle)) {
+        // Only confirmed subscriptions: a pre-join client key is checked by the watcher first.
+        if (sub.party !== other || sub.pending_pk) continue;
+        const key = `${sub.chat_id}|${handle}|${other}`;
+        if (proposalTold.has(key)) continue;
+        proposalTold.set(key, t);
+        await send(sub.chat_id, proposalText(botLang(sub.lang), answerByMs));
+      }
+    } catch {
+      log.warn('telegram proposal notice failed');
+    }
   }
 
   // ------------------------------------------------------------ watcher
@@ -469,5 +504,5 @@ export function registerNotify(app: FastifyInstance, deps: NotifyDeps): Notify {
     });
   }
 
-  return { bot: username, tick, handleUpdate, store: ns };
+  return { bot: username, tick, handleUpdate, proposal, store: ns };
 }

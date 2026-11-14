@@ -127,6 +127,12 @@ export interface Config {
   notifyPollSeconds: number;
   /** Telegram chat id (a number, groups are negative) where the bot sends "Report" messages; "" = reports are only stored. */
   telegramReportsChatId: string;
+  /**
+   * Weekly volume alert: paid deals from requests to one creator profile above
+   * this many USDC in a rolling 7 days -> one message to the reports chat (or a
+   * log line). 0 = off. Nothing is ever blocked by it.
+   */
+  volumeAlertUsdc: number;
   /** Marketplace: re-read not yet finished deals made from requests this often (0 = off; page views still refresh). */
   marketRefreshSeconds: number;
   /** Marketplace: a review can be written or edited this long after the deal ended on-chain, then it is locked (default: 3 days). */
@@ -266,12 +272,14 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
     telegramBotUsername: botUsername(env.TELEGRAM_BOT_USERNAME),
     notifyPollSeconds: int(env.NOTIFY_POLL_SECONDS, 60),
     telegramReportsChatId: /^-?\d{1,20}$/.test((env.TELEGRAM_REPORTS_CHAT_ID ?? '').trim()) ? (env.TELEGRAM_REPORTS_CHAT_ID ?? '').trim() : '',
+    volumeAlertUsdc: Math.max(0, int(env.VOLUME_ALERT_USDC, 10_000)),
     marketRefreshSeconds: int(env.MARKET_REFRESH_SECONDS, 600),
     reviewWindowSeconds: int(env.REVIEW_WINDOW_SECONDS, 3 * 24 * 3600),
     accountRecheckHours: int(env.ACCOUNT_RECHECK_HOURS, 24),
     nearAiApiKey: env.NEARAI_API_KEY ?? '',
     nearAiBaseUrl: (env.NEARAI_BASE_URL || 'https://cloud-api.near.ai/v1').replace(/\/+$/, ''),
-    nearAiModel: env.NEARAI_MODEL || 'z-ai/glm-5.3-flash',
+    // glm-5.3-flash ignored the thinking switch (14-11 live: empty answers, ~38 s); Qwen3.8-27B: TEE-signed, ~5 s.
+    nearAiModel: env.NEARAI_MODEL || 'Qwen/Qwen3.8-27B',
     briefPerMin: int(env.RATE_BRIEF_PER_MIN, 3),
     briefPerDay: int(env.BRIEF_PER_DAY, 30),
   };
@@ -354,5 +362,6 @@ export function describeConfig(c: Config): Record<string, unknown> {
     port: c.port,
     telegramBot: c.telegramBotToken && c.telegramBotUsername ? c.telegramBotUsername : 'off',
     reportsChat: c.telegramBotToken && c.telegramReportsChatId ? 'set' : 'off',
+    volumeAlertUsdc: c.volumeAlertUsdc || 'off',
   };
 }

@@ -1,6 +1,7 @@
 # Secrets
 .env
 .env.*
+server.env
 
 # Dependencies and build output
 node_modules/
@@ -14,4 +15,3 @@ dist/
 
 # Private research notes (never in the repo)
 *.docx
-!.env.example

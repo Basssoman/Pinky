@@ -1,6 +1,6 @@
-// Internal review of server v2 (2026-11-06): the attack scripts, kept as regression
+// Code critic v2 (2026-11-06): the critic's server PoCs, kept as regression
 // tests with INVERTED assertions. Each test replays the attack and checks that
-// it is now blocked.
+// it is now blocked. Report: notes folder `critic-server-v2.md`.
 // No network. The chain is the repo's FakeChain plus the contract-v2 parse
 // rules (contract/src/lib.rs line refs in comments), so a tx the server lets
 // through but the contract would refuse shows up as a relayed failure.

@@ -574,6 +574,7 @@ export const es: Dict = {
     deliverTitle: 'Entregar el trabajo',
     deliverHint: (when) =>
       `Entrega antes del ${when} en cualquier caso: pasado el plazo, el cliente puede recuperar el dinero. Los cambios se hacen antes de la entrega.`,
+    draftTip: 'Envía los borradores por tu mensajería con marca de agua o en baja calidad. La versión completa, solo aquí, a través del trato.',
     filesLink: 'Enlace a los archivos finales',
     filesLinkPlaceholder: 'Google Drive, Dropbox, WeTransfer…',
     filesLinkHint: 'Solo tú y el cliente pueden abrirlo. Está cifrado, ni siquiera nosotros podemos leerlo.',
@@ -744,6 +745,7 @@ export const es: Dict = {
     wrongKey: 'La clave de este navegador no puede dar este paso del trato.',
     outOfDate: 'Algo quedó desactualizado. Inténtalo una vez más.',
     tooEarly: 'Aún es pronto para esto. Espera a que termine el plazo del trato.',
+    dealLive: 'Esta solicitud ya tiene un trato que aún se puede pagar. Cancela primero ese enlace y luego crea un trato nuevo.',
     movedOn: 'El trato cambió mientras tanto. Recarga la página para ver en qué punto está.',
     deliveryPassed: 'El plazo de entrega ya pasó.',
     reviewOver: 'El tiempo de revisión terminó.',

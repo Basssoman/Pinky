@@ -1,11 +1,11 @@
 // Small pieces the marketplace pages share: the pixel picture of a profile,
-// rating, category tags, "from" price, plain error lines.
+// rating, category tags, "from" price, plain error lines, links and contacts.
 import { useEffect, useState, type ReactNode } from 'react';
 import { locale, tr, useLang, useT } from '../i18n';
 import { marketAvatarEn } from '../i18n/market.en';
 import { marketAvatarUk } from '../i18n/market.uk';
 import { ApiError } from '../lib/api';
-import { identicon, outcomeOf, type Category, type PublicReview } from '../lib/market';
+import { identicon, isKnownLink, linkDomain, outcomeOf, type Category, type Contact, type PublicReview } from '../lib/market';
 import { Bitmap } from '../pixel';
 import { explain } from '../ui';
 import { avatarUrl } from './ctx';
@@ -216,5 +216,83 @@ export function Go({ to, className, children, onGo }: { to: string; className?: 
     >
       {children}
     </a>
+  );
+}
+
+/** "youtube.com/@name/videos", cut to 48 characters ("www." dropped). */
+export function shortLink(l: string): string {
+  try {
+    const u = new URL(l);
+    const path = u.pathname === '/' ? '' : u.pathname;
+    const s = `${u.hostname.replace(/^www\./, '')}${path}`;
+    return s.length > 48 ? `${s.slice(0, 46)}…` : s;
+  } catch {
+    return l;
+  }
+}
+
+/**
+ * A link the site does not open: plain text, its domain in bold first, so a
+ * look-alike address is easy to see. It can still be selected and copied.
+ */
+export function LinkAsText({ link }: { link: string }) {
+  const domain = linkDomain(link);
+  const short = shortLink(link);
+  if (!domain || !short.startsWith(domain)) return <span className="mk-link-text">{link}</span>;
+  return (
+    <span className="mk-link-text" title={link}>
+      <strong>{domain}</strong>
+      {short.slice(domain.length)}
+    </span>
+  );
+}
+
+/** One portfolio link: clickable only for a known host (the server's mark, when it sent one, must agree). */
+export function PortfolioLink({ link, known }: { link: string; known?: boolean }) {
+  if (known !== false && isKnownLink(link)) {
+    return (
+      <a href={link} target="_blank" rel="noopener noreferrer nofollow ugc">
+        {shortLink(link)}
+        <span aria-hidden="true"> ↗</span>
+      </a>
+    );
+  }
+  return <LinkAsText link={link} />;
+}
+
+/** A contact as text. Only an e-mail address is a link (mailto); any web address is plain text with its domain. */
+export function ContactValue({ kind, value }: { kind: string; value: string }) {
+  if (kind === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return <a href={`mailto:${value}`}>{value}</a>;
+  if (linkDomain(value)) return <LinkAsText link={value} />;
+  return <span className="mk-contact-value">{value}</span>;
+}
+
+/** The creator's public contact (optional): on the profile and on the request form. */
+export function ContactBlock({ contacts }: { contacts: Contact[] }) {
+  const tt = useT();
+  const t = tt.market.profile;
+  const asText = contacts.some((c) => linkDomain(c.value) !== null);
+  return (
+    <div className="mk-contact">
+      <p className="field-label">{t.contact}</p>
+      {contacts.length === 0 ? (
+        <p className="hint">{t.noContact}</p>
+      ) : (
+        <>
+          <dl className="mk-contacts">
+            {contacts.map((c, i) => (
+              <div key={i}>
+                <dt>{tt.market.contactKinds[c.kind] ?? c.kind}</dt>
+                <dd>
+                  <ContactValue kind={c.kind} value={c.value} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="hint">{t.contactLine}</p>
+          {asText && <p className="hint mk-dim">{t.linkText}</p>}
+        </>
+      )}
+    </div>
   );
 }

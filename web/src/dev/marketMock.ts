@@ -6,7 +6,7 @@
 
 import { ApiError } from '../lib/api';
 import { sha256Hex } from '../lib/keys';
-import type { Card, InboxItem, Profile, ProfileFields, RequestStatus, ReviewLink } from '../lib/market';
+import type { Card, InboxItem, OwnAccount, Profile, ProfileFields, RequestStatus, ReviewLink } from '../lib/market';
 import { profileIdOf } from '../lib/market';
 import type { MarketApi } from '../lib/marketApi';
 
@@ -138,6 +138,32 @@ function avatars(): Record<string, { v: string; url: string }> {
   }
 }
 
+/** Verified accounts: profile id → accounts. "Check now" confirms YouTube / Behance; X waits for the team. */
+const ACCOUNTS = 'kept.dev.marketMock.accounts';
+function accountsStore(): Record<string, OwnAccount[]> {
+  try {
+    return JSON.parse(localStorage.getItem(ACCOUNTS) ?? '{}') as Record<string, OwnAccount[]>;
+  } catch {
+    return {};
+  }
+}
+function saveAccounts(a: Record<string, OwnAccount[]>) {
+  localStorage.setItem(ACCOUNTS, JSON.stringify(a));
+}
+function mockAccountRef(raw: string): Pick<OwnAccount, 'platform' | 'url' | 'handle'> | null {
+  try {
+    const u = new URL(raw);
+    const name = u.pathname.split('/').filter(Boolean)[0]?.replace(/^@/, '').toLowerCase();
+    if (u.protocol !== 'https:' || !name) return null;
+    if (/(^|\.)youtube\.com$/.test(u.hostname)) return { platform: 'youtube', url: `https://www.youtube.com/@${name}`, handle: `@${name}` };
+    if (/(^|\.)(x|twitter)\.com$/.test(u.hostname)) return { platform: 'x', url: `https://x.com/${name}`, handle: `@${name}` };
+    if (/(^|\.)behance\.net$/.test(u.hostname)) return { platform: 'behance', url: `https://www.behance.net/${name}`, handle: `@${name}` };
+  } catch {
+    /* not a link */
+  }
+  return null;
+}
+
 export function mockMarketApi(): MarketApi {
   return {
     async profiles(q) {
@@ -156,7 +182,8 @@ export function mockMarketApi(): MarketApi {
       if (!p || p.hidden) throw notFound();
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { profile_pk, hidden, ...pub } = p;
-      return pub;
+      const accounts = (accountsStore()[id] ?? []).filter((a) => a.status === 'confirmed').map(({ platform, handle, url }) => ({ platform, handle, url }));
+      return { ...pub, accounts };
     },
     async putProfile(id, body) {
       await wait();
@@ -292,7 +319,6 @@ export function mockMarketApi(): MarketApi {
           `- ${body.request.split('\n')[0].slice(0, 80)}`,
           '- Delivered as MP4, 1920×1080, 30 fps (suggested), plus a vertical 1080×1920 version',
           '- Length: 6–8 seconds (suggested)',
-          '- Two rounds of changes included',
           '- The client sends the logo as SVG or PNG and the brand colors',
           '- Not included: voice-over and paid music',
         ].join('\n'),
@@ -341,6 +367,54 @@ export function mockMarketApi(): MarketApi {
       return a && a.v === v ? a.url : '';
     },
     // Dev only: nothing is stored or sent; same refusals as the server.
+    async keyResets() {
+      await wait();
+      return {
+        items: [
+          { month: new Date().toISOString().slice(0, 7), profile_id: SAMPLES[0][0], nickname: SAMPLES[0][1].nickname, status: 'pending', effective_at: new Date(Date.now() + 2 * 86_400_000).toISOString() },
+          { month: '2026-10', profile_id: 'b1b2c3d4e5f60718293a4b5c', nickname: null, status: 'cancelled', effective_at: null },
+        ],
+      };
+    },
+    async openReview() {
+      await wait();
+      return { ok: true, started: false, can_review: false, review_until: null };
+    },
+    async accounts(id) {
+      await wait();
+      return { items: accountsStore()[id] ?? [] };
+    },
+    async addAccount(id, body) {
+      await wait();
+      const ref = mockAccountRef(body.url);
+      if (!ref) throw new ApiError(400, 'bad_account', 'use the link of your YouTube channel, X account or Behance profile (https)');
+      const all = accountsStore();
+      const list = all[id] ?? [];
+      const same = list.find((a) => a.url === ref.url);
+      if (same) return { ok: true, account: same };
+      if (list.length >= 3) throw new ApiError(409, 'too_many_accounts', 'at most 3 accounts per profile');
+      const code = `pinky-${Array.from({ length: 10 }, () => '0123456789abcdefghjkmnpqrstvwxyz'[Math.floor(Math.random() * 32)]).join('')}`;
+      const account: OwnAccount = { ...ref, account_id: Math.random().toString(16).slice(2, 18).padEnd(16, '0'), code, status: 'waiting', by_hand: ref.platform === 'x' };
+      all[id] = [...list, account];
+      saveAccounts(all);
+      return { ok: true, account };
+    },
+    async checkAccount(id, aid) {
+      await wait();
+      const all = accountsStore();
+      const a = (all[id] ?? []).find((x) => x.account_id === aid);
+      if (!a) throw notFound();
+      a.status = a.by_hand ? 'review' : 'confirmed';
+      saveAccounts(all);
+      return { ok: true, result: a.by_hand ? 'manual' : 'found', account: a };
+    },
+    async removeAccount(id, aid) {
+      await wait();
+      const all = accountsStore();
+      all[id] = (all[id] ?? []).filter((x) => x.account_id !== aid);
+      saveAccounts(all);
+      return { ok: true };
+    },
     async report(body) {
       await wait();
       if ([...(body.text ?? '')].length > 500) throw new ApiError(400, 'bad_request', 'text is too long (max 500 characters)');

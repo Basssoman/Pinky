@@ -11,16 +11,24 @@
 //   confirm <reset_id> --seen-in-bio
 //        You opened <account_url> yourself and saw the code in the bio. The new
 //        key takes effect in 72 h; until then the profile shows "the key is
-//        being changed" and the CURRENT key can cancel it with one signature.
+//        being changed" and the CURRENT key can cancel it with one signature
+//        (unless the reset has a verified-account proof, see below).
+//   confirm <reset_id> --auto
+//        The site reads the bio of <account_url> itself (YouTube / Behance, the
+//        same rules as the site). If it cannot read it, check by hand (--seen-in-bio).
 //   cancel <reset_id>      stop a reset in progress
 //   list [profile_id]      resets (newest first), incl. the code and the account
 //   apply-due              apply confirmed resets whose 72 h passed (the server does this too)
 //
-// Limits (honest): the bio is checked BY HAND. The automatic check of a
-// verified account is not built, so this is not yet the
-// "verified account beats the current key" rule: the current key can
-// cancel every reset. On a theft report, hide the profile at once
-// (`scripts/market-admin.ts hide`) and talk to the owner.
+// When <account_url> is an account CONFIRMED on this profile
+// (ops/accounts.sh, "account confirmed: @handle") at least 14 days before the
+// reset, the reset carries a verified-account proof: the current key can NOT
+// cancel it (a thief with the stolen key cannot stop it); only you can
+// (cancel). Without it, the current key can cancel with one signature.
+// The 14 days: a thief holding the key could add and confirm an account of
+// their own; it shows on the public profile long before it counts.
+// On a theft report, hide the profile at once (ops/profile-hide.sh) and talk
+// to the owner. Pausing a profile is still your call (no proof rule in code).
 //
 // DB: $DB_PATH, or DB_PATH from $ENV_FILE (same as the server).
 // Run: node --disable-warning=ExperimentalWarning dist/scripts/market-key-reset.js <command> ...
@@ -30,7 +38,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { loadEnvFiles, readConfig } from '../src/config.ts';
 import { parsePublicKey } from '../src/encoding.ts';
-import { KEY_RESET_DELAY_MS } from '../src/market.ts';
+import { KEY_RESET_DELAY_MS, verifiedProof } from '../src/market.ts';
+import { parseAccountUrl, processChecker, type AccountChecker } from '../src/accounts.ts';
 import { MarketStore, type KeyResetRow } from '../src/market-store.ts';
 
 /** Crockford base32 without look-alikes. */
@@ -88,8 +97,22 @@ export function run(ms: MarketStore, args: string[], out: (s: string) => void = 
       const host = hostOf(account);
       if (!host) return fail('account_url must be an https link');
       const known = [...p.portfolio, ...p.contacts.map((c) => c.value)].some((v) => v.toLowerCase().includes(host) || hostOf(v) === host);
-      const r = ms.insertReset({ reset_id: randomBytes(8).toString('hex'), profile_id: pid, old_pk: p.profile_pk, new_pk: newPk, account_url: account, code: resetCode() });
+      const proof = verifiedProof(ms, pid, account, ms.nowMs());
+      const r = ms.insertReset({
+        reset_id: randomBytes(8).toString('hex'),
+        profile_id: pid,
+        old_pk: p.profile_pk,
+        new_pk: newPk,
+        account_url: proof ? proof.url : account,
+        code: resetCode(),
+        proof: proof ? 'verified' : null,
+      });
       out(`reset ${r.reset_id} issued for "${p.nickname}" (${pid})`);
+      out(
+        proof
+          ? `PROOF: ${proof.handle} is an account confirmed on this profile since ${proof.confirmed_at}. The current key will NOT be able to cancel this reset.`
+          : 'No verified-account proof (no account at this link confirmed on this profile 14+ days ago): the current key CAN cancel this reset.',
+      );
       if (!known) out(`WARNING: ${host} is not among the profile's links now. Use only an account the profile showed BEFORE the trouble.`);
       out('Send the owner this text. They put ONE of the lines in the bio of:');
       out(`  ${account}`);
@@ -100,12 +123,7 @@ export function run(ms: MarketStore, args: string[], out: (s: string) => void = 
     case 'confirm': {
       const [rid, flag] = rest;
       if (!rid || flag !== '--seen-in-bio') return fail('usage: confirm <reset_id> --seen-in-bio   (only after you saw the code in the bio yourself)');
-      const r = ms.getReset(rid);
-      if (!r) return fail(`no reset ${rid}`);
-      if (!ms.confirmReset(rid, KEY_RESET_DELAY_MS)) return fail(`reset ${rid} is ${r.status}, not issued`);
-      const now = ms.getReset(rid)!;
-      out(`confirmed: the new key of ${r.profile_id} takes effect ${now.effective_at} (72 h). Until then the current key can cancel.`);
-      return 0;
+      return confirm(ms, rid, out);
     }
     case 'cancel': {
       const [rid] = rest;
@@ -126,15 +144,64 @@ export function run(ms: MarketStore, args: string[], out: (s: string) => void = 
       return 0;
     }
     default:
-      return fail('usage: issue <profile_id> <new_profile_pk> <account_url> | confirm <reset_id> --seen-in-bio | cancel <reset_id> | list [profile_id] | apply-due');
+      return fail(
+        'usage: issue <profile_id> <new_profile_pk> <account_url> | confirm <reset_id> --seen-in-bio|--auto | cancel <reset_id> | list [profile_id] | apply-due',
+      );
   }
+}
+
+function confirm(ms: MarketStore, rid: string, out: (s: string) => void): number {
+  const r = ms.getReset(rid);
+  if (!r) {
+    out(`error: no reset ${rid}`);
+    return 1;
+  }
+  // The proof holds only while the account is still confirmed.
+  if (r.proof === 'verified' && !verifiedProof(ms, r.profile_id, r.account_url, Date.parse(r.issued_at))) {
+    ms.dropResetProof(rid);
+    out('NOTE: the account is no longer confirmed on this profile: no verified-account proof; the current key CAN cancel.');
+  }
+  if (!ms.confirmReset(rid, KEY_RESET_DELAY_MS)) {
+    out(`error: reset ${rid} is ${r.status}, not issued`);
+    return 1;
+  }
+  const now = ms.getReset(rid)!;
+  out(
+    `confirmed: the new key of ${r.profile_id} takes effect ${now.effective_at} (72 h). ${
+      now.proof === 'verified' ? 'Verified-account proof: only you can cancel it.' : 'Until then the current key can cancel.'
+    }`,
+  );
+  return 0;
+}
+
+/** `confirm <reset_id> --auto`: the site reads the bio itself (same rules as the site); "found" confirms. */
+export async function confirmAuto(ms: MarketStore, rid: string, out: (s: string) => void = console.log, checker: AccountChecker = processChecker()): Promise<number> {
+  const r = ms.getReset(rid);
+  if (!r) {
+    out(`error: no reset ${rid}`);
+    return 1;
+  }
+  const ref = parseAccountUrl(r.account_url);
+  if (!ref) {
+    out('error: the site can only read YouTube / Behance account pages; check by hand (--seen-in-bio)');
+    return 1;
+  }
+  const result = await checker.check({ platform: ref.platform, url: ref.url, handle: ref.handle, codes: [r.code, r.code.replace('СБРОС-КЛЮЧА', 'PINKY-KEY-RESET')] });
+  if (result !== 'found') {
+    out(`the site could not see the code (${result}). Open ${r.account_url} yourself; if the code is there: confirm ${rid} --seen-in-bio`);
+    return 1;
+  }
+  out('the code is in the bio (read by the site).');
+  return confirm(ms, rid, out);
 }
 
 // Run as a script (not when a test imports it).
 if (process.argv[1] && /market-key-reset\.(js|ts)$/.test(process.argv[1])) {
   loadEnvFiles();
   const db = new DatabaseSync(readConfig().dbPath);
-  const code = run(new MarketStore(db), process.argv.slice(2));
+  const ms = new MarketStore(db);
+  const args = process.argv.slice(2);
+  const code = args[0] === 'confirm' && args[2] === '--auto' && args[1] ? await confirmAuto(ms, args[1]) : run(ms, args);
   db.close();
   process.exit(code);
 }

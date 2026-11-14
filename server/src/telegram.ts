@@ -105,6 +105,11 @@ interface BotTexts {
   keyReset: string;
   /** Answer to /chatid: this chat's id, for TELEGRAM_REPORTS_CHAT_ID. */
   chatId: (id: string) => string;
+  /**
+   * The other party proposed an agreed split: answer by `when` (a UTC time
+   * from `botTime`). No amounts, percentages, titles or links.
+   */
+  proposal: (when: string) => string;
 }
 
 const NEVER_EN = 'We never ask for your personal link, and this bot never sends links.';
@@ -138,6 +143,7 @@ export const BOT_TEXTS: Record<BotLang, BotTexts> = {
     help: `This bot only tells you that your deal has news. /stop — stop all messages. ${NEVER_EN}`,
     keyReset: `Pinky: support is changing the key of your creator profile. If you did not ask for this, open "Requests" on the site with your profile key and press "Cancel the change", then write to support. ${NEVER_EN}`,
     chatId: (id) => `This chat's id: ${id}\nOnly the Pinky team needs it (to get "Report" messages here).`,
+    proposal: (when) => `Pinky: your deal has a new proposal. Answer by ${when}, after that it expires.`,
   },
   uk: {
     news: 'Pinky: у вашій угоді є новини.',
@@ -166,6 +172,7 @@ export const BOT_TEXTS: Record<BotLang, BotTexts> = {
     help: `Цей бот лише каже, що в угоді є новини. /stop — зупинити всі повідомлення. ${NEVER_UK}`,
     keyReset: `Pinky: підтримка змінює ключ вашого профілю виконавця. Якщо ви цього не просили, відкрийте на сайті «Запити» зі своїм ключем профілю і натисніть «Скасувати зміну», а потім напишіть у підтримку. ${NEVER_UK}`,
     chatId: (id) => `Id цього чату: ${id}\nВін потрібен лише команді Pinky (щоб отримувати сюди скарги).`,
+    proposal: (when) => `Pinky: у вашій угоді нова пропозиція. Дайте відповідь до ${when}, потім вона втратить силу.`,
   },
 };
 
@@ -173,6 +180,22 @@ export const BOT_TEXTS: Record<BotLang, BotTexts> = {
 export function newsText(lang: BotLang, events: NotifyEvent[]): string {
   const t = BOT_TEXTS[lang];
   return [t.news, ...events.map((e) => t.events[e]), t.open].join('\n\n');
+}
+
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** A time for a bot text, in UTC (the bot does not know the person's time zone): "14 Nov, 18:00 UTC" / "14.11, 18:00 UTC". */
+export function botTime(lang: BotLang, ms: number): string {
+  const d = new Date(ms);
+  const hm = `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())} UTC`;
+  return lang === 'uk' ? `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}, ${hm}` : `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}, ${hm}`;
+}
+
+/** The message about a new split proposal from the other party. */
+export function proposalText(lang: BotLang, answerByMs: number): string {
+  const t = BOT_TEXTS[lang];
+  return [t.proposal(botTime(lang, answerByMs)), t.open].join('\n\n');
 }
 
 /** Text that looks like a link, a personal link or a key: the bot never takes those. */

@@ -613,6 +613,7 @@ export const en = {
     deliverTitle: 'Deliver the work',
     deliverHint: (when: string) =>
       `Deliver before ${when} in any case: after the deadline the client can take the money back. Revisions happen before delivery.`,
+    draftTip: 'Send drafts in your messenger with a watermark or in low quality. Send the full version only here, through the deal.',
     filesLink: 'Link to the final files',
     filesLinkPlaceholder: 'Google Drive, Dropbox, WeTransfer…',
     filesLinkHint: 'Only you and the client can open it. It’s encrypted, even we can’t read it.',
@@ -794,6 +795,7 @@ export const en = {
     wrongKey: 'The key in this browser can’t do this step of the deal.',
     outOfDate: 'Something went out of date. Try once more.',
     tooEarly: 'It’s too early for this. Wait until the time on the deal is over.',
+    dealLive: 'This request already has a deal that can still be paid. Cancel that link first, then make a new deal.',
     movedOn: 'The deal has changed in the meantime. Reload the page to see where it is now.',
     deliveryPassed: 'The delivery deadline has passed.',
     reviewOver: 'The review time is over.',

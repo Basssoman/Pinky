@@ -256,10 +256,12 @@ test('request life: a deal that expired unpaid or was cancelled puts the request
   await market().refreshLinks();
   assert.equal((await view(r2)).status, 'discussing');
   // Only the newest deal of a request counts: an older dead deal does not reopen a newer live one.
+  // (A new deal is allowed once the old link expired, even before the refresher read it.)
   const r3 = await openRequest(alice.id);
   const old = await dealFrom(alice, r3.handle, 3600_000);
+  clock += 3600_000 + 1_000;
   await dealFrom(alice, r3.handle, 10 * 3600_000);
-  clock += 3600_000 + 31_000;
+  clock += 31_000;
   await market().refreshLinks();
   assert.equal((await view(r3)).status, 'deal_ready');
   assert.ok(market().store.getLink(old.handle)!.final);

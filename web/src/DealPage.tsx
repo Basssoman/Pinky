@@ -7,6 +7,7 @@ import { DAY, dealDates, fmtDate, revisionsText, usd, type DealInfo } from './de
 import { tr, useT } from './i18n';
 import { rich } from './i18n/rich';
 import { Problem } from './ui';
+import { ProfileChangeNote } from './market/DealNote';
 
 const SHORT_REVIEW_MS = 3 * DAY; // at the minimum: easy to miss if you're away
 const LONG_LOCK_MS = 30 * DAY;
@@ -76,6 +77,7 @@ export function DealPage(props: {
               })
             : rich(t.fromCode, { code: <span className="code">{info.creatorCode}</span> })}
         </p>
+        {info.creator && <ProfileChangeNote profileId={info.creator.profileId} />}
         <h1 id="deal-title">{info.title}</h1>
         <p className="mobile-price">{t.mobilePrice(price, info.deliveryMs)}</p>
 

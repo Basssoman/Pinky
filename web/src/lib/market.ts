@@ -100,6 +100,39 @@ export interface Profile extends ProfileFields {
   recent_change?: RecentChange | null;
   /** Support is changing the key of this profile. */
   key_changing?: boolean;
+  /** Accounts whose bio has this profile's code ("account confirmed: @handle"). */
+  accounts?: PublicAccount[];
+  /** Per portfolio link: true = the server found a known host (YouTube, Behance, X, Google Drive). Older servers leave it out. */
+  portfolio_known?: boolean[];
+}
+
+/** A YouTube channel, an X account or a Behance profile the creator added. */
+export type AccountPlatform = 'youtube' | 'x' | 'behance';
+
+export interface PublicAccount {
+  platform: AccountPlatform;
+  /** "@name" (or a YouTube channel id). */
+  handle: string;
+  url: string;
+}
+
+/** The owner's view of an account (signed read): the code to put in the bio and where it stands. */
+export interface OwnAccount extends PublicAccount {
+  account_id: string;
+  code: string;
+  /** waiting = the code is not seen yet; review = the site could not read the page, our team looks by hand; lost = the code is gone. */
+  status: 'waiting' | 'review' | 'confirmed' | 'lost';
+  /** The site cannot read this platform's bio itself (X): our team looks by hand. */
+  by_hand: boolean;
+}
+
+/** One line of the public key-reset log. */
+export interface KeyResetEntry {
+  month: string;
+  profile_id: string;
+  nickname: string | null;
+  status: 'pending' | 'changed' | 'cancelled';
+  effective_at: string | null;
 }
 
 export interface RecentChange {
@@ -155,6 +188,18 @@ export interface RequestView {
   deal_link?: string | null;
   deal_link_box?: LinkBox | null;
   deal_proof?: DealProof | null;
+  /** Older deals of this request, newest first: not valid, the client must not pay them. */
+  old_deals?: OldDeal[];
+}
+
+/** A deal of a request that was replaced or ended: shown to the client as "not valid, don't pay". */
+export interface OldDeal {
+  /** "YYYY-MM-DD", the day the creator made it. */
+  made_on: string;
+  title: string | null;
+  /** "12.5" (USDC), or null when the server could not read it. */
+  amount_usdc: string | null;
+  deal_link_box: LinkBox | null;
 }
 
 /** One request in the creator's inbox (signed read). */
@@ -171,12 +216,16 @@ export interface InboxItem {
   decline_reason?: string | null;
   /** When it closes by itself if not answered (ISO). */
   closes_at?: string | null;
+  /** Lines of `brief` (0-based) the AI helper wrote and the client kept as they were. */
+  ai_lines?: number[];
 }
 
 /** A key change by support in progress (the owner's signed inbox only). */
 export interface KeyChange {
   reset_id: string;
   effective_at: string;
+  /** false = proved through an account confirmed on this profile: only support can stop it. */
+  cancellable?: boolean;
 }
 
 export interface ReviewLink {
@@ -191,6 +240,8 @@ export interface ReviewLink {
   review_until?: string | null;
   outcome?: ReviewOutcome | null;
   review?: PublicReview | null;
+  /** The deal ended by itself; the 3 days start when the client opens it (a signed read). */
+  starts_on_open?: boolean;
 }
 
 // ---------------------------------------------------------------- limits (same as the server)
@@ -331,6 +382,23 @@ export const keyResetCancelMessage = (contractId: string, profileId: string, res
   `${MESSAGE_PREFIX}|${contractId}|profile-key-reset-cancel|${profileId}|${resetId}|${exp}`;
 export const requestDealMessage = (contractId: string, handle: string, creatorPk: string, exp: string) =>
   `${MESSAGE_PREFIX}|${contractId}|request-deal|${handle}|${creatorPk}|${exp}`;
+/** Add an account; signs sha256 of the link exactly as sent. */
+export const accountAddMessage = (contractId: string, profileId: string, url: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-account-add|${profileId}|${sha256Hex(url)}|${exp}`;
+export const accountsReadMessage = (contractId: string, profileId: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-accounts|${profileId}|${exp}`;
+export const accountCheckMessage = (contractId: string, profileId: string, accountId: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-account-check|${profileId}|${accountId}|${exp}`;
+export const accountRemoveMessage = (contractId: string, profileId: string, accountId: string, exp: string) =>
+  `${MESSAGE_PREFIX}|${contractId}|profile-account-remove|${profileId}|${accountId}|${exp}`;
+/** The client opened a deal that ended by itself (signed by the CLIENT deal key). */
+export const reviewOpenMessage = (contractId: string, dealId: number, exp: string) => `${MESSAGE_PREFIX}|${contractId}|review-open|${dealId}|${exp}`;
+
+/** "I opened the deal" (starts the 3-day review window of a deal that ended by itself). */
+export function signReviewOpen(contractId: string, clientKey: DealKey, dealId: number, nowMs: number): SignedWrite {
+  const exp = expiresNs(nowMs);
+  return { expires_at_ns: exp, sig: sign(clientKey, reviewOpenMessage(contractId, dealId, exp)) };
+}
 /** Signed by the deal's CLIENT key. `text` is hashed exactly as sent (trimmed). An edit needs a later expiry. */
 export const reviewMessage = (contractId: string, dealId: number, profileId: string, rating: number, text: string, exp: string) =>
   `${MESSAGE_PREFIX}|${contractId}|review|${dealId}|${profileId}|${rating}|${sha256Hex(text)}|${exp}`;
@@ -391,6 +459,22 @@ export function signDiscuss(contractId: string, k: ProfileKey, handle: string, n
 export function signKeyResetCancel(contractId: string, k: ProfileKey, resetId: string, nowMs: number): SignedWrite {
   const exp = expiresNs(nowMs);
   return { expires_at_ns: exp, sig: sign(dealKeyOf(k), keyResetCancelMessage(contractId, profileIdOfKey(k), resetId, exp)) };
+}
+export function signAccountAdd(contractId: string, k: ProfileKey, url: string, nowMs: number): SignedWrite & { url: string } {
+  const exp = expiresNs(nowMs);
+  return { url, expires_at_ns: exp, sig: sign(dealKeyOf(k), accountAddMessage(contractId, profileIdOfKey(k), url, exp)) };
+}
+export function signAccountsRead(contractId: string, k: ProfileKey, nowMs: number): SignedWrite {
+  const exp = expiresNs(nowMs);
+  return { expires_at_ns: exp, sig: sign(dealKeyOf(k), accountsReadMessage(contractId, profileIdOfKey(k), exp)) };
+}
+export function signAccountCheck(contractId: string, k: ProfileKey, accountId: string, nowMs: number): SignedWrite {
+  const exp = expiresNs(nowMs);
+  return { expires_at_ns: exp, sig: sign(dealKeyOf(k), accountCheckMessage(contractId, profileIdOfKey(k), accountId, exp)) };
+}
+export function signAccountRemove(contractId: string, k: ProfileKey, accountId: string, nowMs: number): SignedWrite {
+  const exp = expiresNs(nowMs);
+  return { expires_at_ns: exp, sig: sign(dealKeyOf(k), accountRemoveMessage(contractId, profileIdOfKey(k), accountId, exp)) };
 }
 export function signRequestDeal(contractId: string, k: Pick<ProfileKey, 'seed' | 'pk'>, handle: string, creatorPk: string, nowMs: number): SignedWrite {
   const exp = expiresNs(nowMs);
@@ -646,6 +730,76 @@ export const isHttpsLink = (s: string): boolean => {
     return false;
   }
 };
+
+/**
+ * Portfolio links open from the site only for these hosts (YouTube, Behance,
+ * X, Google Drive); any other link, and any link given as a contact, is shown
+ * as plain text with its domain. Same list as the server.
+ */
+export const KNOWN_LINK_HOSTS: readonly string[] = [
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'behance.net',
+  'www.behance.net',
+  'x.com',
+  'www.x.com',
+  'mobile.x.com',
+  'twitter.com',
+  'www.twitter.com',
+  'mobile.twitter.com',
+  'drive.google.com',
+];
+
+/** An https link to one of the known hosts (exact host, default port, no user name). */
+export function isKnownLink(s: string): boolean {
+  try {
+    const u = new URL(s.trim());
+    return u.protocol === 'https:' && !u.port && !u.username && !u.password && KNOWN_LINK_HOSTS.includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** The domain of a link ("www." dropped), or null when it is not a web link. */
+export function linkDomain(s: string): string | null {
+  const v = s.trim();
+  if (!/^https?:\/\//i.test(v)) return null;
+  try {
+    return new URL(v).hostname.replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The lines of the brief to send as "written by the AI helper": every line
+ * with text that is, word for word, a line of the AI's answer. A line the
+ * client changed is their own. Each AI line marks at most as many lines as it
+ * appears in the answer. Line numbers count in the brief as sent (trimmed).
+ */
+export function aiLinesOf(brief: string, aiAnswer: string | null): number[] {
+  if (!aiAnswer) return [];
+  const left = new Map<string, number>();
+  for (const l of aiAnswer.split('\n')) {
+    const k = l.trim();
+    if (k) left.set(k, (left.get(k) ?? 0) + 1);
+  }
+  const out: number[] = [];
+  brief
+    .trim()
+    .split('\n')
+    .forEach((l, i) => {
+      const k = l.trim();
+      const n = k ? (left.get(k) ?? 0) : 0;
+      if (n > 0) {
+        out.push(i);
+        left.set(k, n - 1);
+      }
+    });
+  return out;
+}
 
 const intIn = (n: number, [min, max]: readonly [number, number]) => Number.isInteger(n) && n >= min && n <= max;
 

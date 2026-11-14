@@ -12,6 +12,8 @@ import {
   CATEGORIES,
   cleanProfile,
   CONTACT_KINDS,
+  isHttpsLink,
+  isKnownLink,
   LIMITS,
   newProfileKey,
   parseProfileRecovery,
@@ -32,6 +34,7 @@ import { navigate } from '../real/ctx';
 import { CopyButton, Notice, useConfirm, useRun } from '../ui';
 import { market, useProfileKey, useTitle } from './ctx';
 import { Avatar, dayName, Go, Identicon, LoadState, MarketProblem, marketError, useAvatarTexts } from './parts';
+import { AccountsSection } from './Accounts';
 
 export function EditorPage() {
   const tt = useT();
@@ -567,6 +570,8 @@ function ProfileForm({ k }: { k: ProfileKey }) {
                 </div>
               ))}
               {err('portfolio', t.errPortfolio)}
+              {/* A valid link to another site is saved, but the profile shows it as text with its domain. */}
+              {draft.portfolio.some((l) => isHttpsLink(l) && !isKnownLink(l)) && <span className="hint">{t.portfolioOther}</span>}
               {draft.portfolio.length < LIMITS.portfolio && (
                 <button className="btn-ghost btn-sm mk-add" type="button" onClick={() => set({ portfolio: [...draft.portfolio, ''] })}>
                   + {t.addLink}
@@ -685,6 +690,9 @@ function ProfileForm({ k }: { k: ProfileKey }) {
             </div>
           </form>
         </section>
+
+        {/* "Account confirmed: @handle" (only for a saved profile). */}
+        <AccountsSection k={k} exists={exists} />
 
         <section className="mk-section mk-danger" aria-label={t.keyHere}>
           <div className="panel">

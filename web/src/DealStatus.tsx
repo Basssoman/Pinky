@@ -11,6 +11,7 @@ import type { Coin } from './lib/tokens';
 import { Settle } from './Settle';
 import { Problem, useRun } from './ui';
 import { Withdraw, type WithdrawChoice } from './Withdraw';
+import { ProfileChangeNote } from './market/DealNote';
 
 export type Role = 'client' | 'creator';
 export type DealState =
@@ -134,6 +135,7 @@ export function DealStatus({ view: v, actions: a, review }: { view: StatusView; 
                 })
               : t.asCreator}
         </p>
+        {role === 'client' && info.creator && <ProfileChangeNote profileId={info.creator.profileId} />}
         <h1 id="deal-status-title">{info.title}</h1>
 
         <Hero v={v} />
@@ -459,6 +461,8 @@ function Deliver({ v, onDeliver }: { v: StatusView; onDeliver: StatusActions['on
     <div className="panel">
       <p className="panel-title">{t.deliverTitle}</p>
       <p className="hint">{t.deliverHint(when(v.d.deliverBy, v.now))}</p>
+      {/* Drafts go through the messenger marked or small; the full work only through the deal. */}
+      <p className="hint">{t.draftTip}</p>
       <div className="pay-form">
         <label className="field">
           <span className="field-label">{t.filesLink}</span>

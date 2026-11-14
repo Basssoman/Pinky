@@ -7,6 +7,10 @@
 // "In talks" (the creator marks it) → a deal, or "Declined" with an optional
 // reason. Unanswered requests close after 7 days. A key change by support in
 // progress shows on top, with "Cancel" for the current key.
+//
+// Brief lines the client's AI helper wrote (and the client kept) are marked,
+// so the creator checks them with the client before making the deal. One
+// live deal per request: a new deal only after the last link was cancelled.
 import { useState } from 'react';
 import { useT } from '../i18n';
 import { NET } from '../lib/config';
@@ -129,7 +133,8 @@ const ANSWERABLE: RequestStatus[] = ['open', 'viewed', 'discussing'];
 
 /** Support is changing this profile's key; the current key can stop it with one signature. */
 function KeyChangeBanner({ change, k, onDone }: { change: KeyChange; k: ProfileKey; onDone: () => void }) {
-  const tl = useT().market.life;
+  const tt = useT();
+  const tl = tt.market.life;
   const cancelling = useRun();
   const asking = useConfirm();
   const [done, setDone] = useState(false);
@@ -146,13 +151,15 @@ function KeyChangeBanner({ change, k, onDone }: { change: KeyChange; k: ProfileK
         <strong>{tl.resetTitle}</strong>
       </p>
       <p>{tl.resetLine(dayName(change.effective_at))}</p>
+      {/* Proved through an account confirmed on this profile: only support can stop it. */}
+      {change.cancellable === false && <p>{tt.market.resets.noCancel}</p>}
       <MarketProblem error={cancelling.error} />
-      <div className="actions">
+      {change.cancellable !== false && <div className="actions">
         <button className="cta cta-inline" type="button" disabled={cancelling.busy} onClick={async () => (await asking.confirm(tl.resetConfirm, tl.resetCancel)) && cancelling.run(cancel)}>
           {cancelling.busy ? tl.resetCancelling : tl.resetCancel}
         </button>
         {asking.box}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -187,7 +194,7 @@ function RequestCard({ r, k, onDeal, onChanged }: { r: InboxItem; k: ProfileKey;
         <ReportLink kind="request" id={r.handle} className="mk-report-head" />
       </div>
       <p className="panel-title">{r.service?.title ?? t.general}</p>
-      <p className="mk-pre mk-req-brief">{r.brief}</p>
+      <BriefLines brief={r.brief} ai={r.ai_lines} />
       <dl className="mk-req-facts">
         {r.wanted_deadline && (
           <div>
@@ -212,6 +219,7 @@ function RequestCard({ r, k, onDeal, onChanged }: { r: InboxItem; k: ProfileKey;
         )}
       </dl>
       {r.closes_at && (r.status === 'open' || r.status === 'viewed') && <p className="hint">{tl.closesOnInbox(dayName(r.closes_at))}</p>}
+      {r.status === 'deal_ready' && <p className="hint">{t.oneDeal}</p>}
       {open && !asking && (
         <>
           <MarketProblem error={discussing.error} />
@@ -251,5 +259,32 @@ function RequestCard({ r, k, onDeal, onChanged }: { r: InboxItem; k: ProfileKey;
         </div>
       )}
     </article>
+  );
+}
+
+/** The brief, with the lines the AI helper wrote marked (when the client's browser sent them). */
+function BriefLines({ brief, ai }: { brief: string; ai?: number[] }) {
+  const t = useT().market.inbox;
+  const marked = new Set(ai ?? []);
+  if (marked.size === 0) return <p className="mk-pre mk-req-brief">{brief}</p>;
+  return (
+    <>
+      <ul className="mk-brief-lines mk-req-brief">
+        {brief.split('\n').map((line, i) =>
+          marked.has(i) ? (
+            <li key={i} className="mk-ai-line">
+              <span className="mk-ai-mark" aria-hidden="true">
+                ✦{' '}
+              </span>
+              <span className="sr-only">{t.aiLine}: </span>
+              {line}
+            </li>
+          ) : (
+            <li key={i}>{line}</li>
+          ),
+        )}
+      </ul>
+      <p className="hint">{t.aiLegend}</p>
+    </>
   );
 }

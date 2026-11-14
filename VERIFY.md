@@ -7,17 +7,23 @@ architecture: [README.md](README.md). Honest limits: [README.md#honest-limits](R
 
 Everything below is read-only. Nothing here signs a transaction or moves money.
 
-> **Which contract?** All live deals so far ran on our **TEST instance**
-> `9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c`
-> (mainnet, real USDC, but SHORT timers: review 5 min, dispute 15 min,
-> pay-by 3 h; it still has 1 full-access key). The **final** contract (real
-> timers, all full-access keys deleted) is `FINAL_CONTRACT_ID`, deployed after
-> the feature freeze on 2026-11-14. Every command takes the contract id as a
-> parameter.
+> **Which contract?** The live contract is **`escrow.pinkydeals.near`**
+> (mainnet, real USDC, real timers: review ≥ 3 days, dispute 7 days, pay-by
+> 7 days). It was built reproducibly from this repository at commit
+> [`912cb4b`](https://github.com/Basssoman/pinky/tree/912cb4b6a0b7ee8ae8af1e81b900671ab3a2dd22);
+> step 6 rebuilds it byte for byte. Its last full-access key (`EfkwMx…`, the
+> deploy key) is still on the account and will be deleted; until then the
+> "full-access keys" check below prints `FAIL`, and that is the honest answer.
+>
+> Our first live deals (8 of them, 2026-11-06..11) ran on a **TEST instance**
+> `9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c` with
+> short timers. That account was deleted on 2026-11-14 after the final
+> contract went live; its history stays on archival nodes and explorers, and
+> `npm run verify` can still check it (see [Earlier deals](#earlier-deals-on-the-test-instance)).
 
 ## Step by step: try a deal
 
-Needs: Node.js ≥ 22 and `curl`. Step 5 also needs Rust + `cargo-near`
+Needs: Node.js ≥ 22 and `curl`. Step 6 also needs Rust + `cargo-near` + Docker
 (see [README.md#run-from-scratch](README.md#run-from-scratch)).
 
 ### 1. Open the site (30 s)
@@ -30,19 +36,20 @@ know". Click the button to start a deal: you get the "New deal" form. No
 
 ### 2. Open the contract on the explorer (30 s)
 
-Do: open https://nearblocks.io/address/9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c
+Do: open https://nearblocks.io/address/escrow.pinkydeals.near
 
-You see: `create_deal`, `act`, `settle` and `resolve_dispute` transactions
-from 2026-11-06 and 2026-11-11 (table below). The `act` calls come from one
-relayer account `f1fb5d0a…9531a5`; the relayer only pays gas, the party's
-signature is inside the arguments.
+You see: the deploy + init transaction (2026-11-13) and deal 0 on 2026-11-14:
+`create_deal`, then three `act` calls and the USDC payment arriving through
+`ft_on_transfer`. The `create_deal` and `act` calls come from one relayer
+account `f1fb5d0a…9531a5`; the relayer only pays gas, the party's signature is
+inside the arguments.
 
-### 3. Read a finished deal straight from the chain (1 min)
+### 3. Read the finished deal straight from the chain (1 min)
 
 Do:
 
 ```bash
-curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"call_function","finality":"final","account_id":"9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c","method_name":"get_deal","args_base64":"eyJkZWFsX2lkIjowfQ=="}}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(Buffer.from(JSON.parse(s).result.result).toString()))'
+curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"call_function","finality":"final","account_id":"escrow.pinkydeals.near","method_name":"get_deal","args_base64":"eyJkZWFsX2lkIjowfQ=="}}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(Buffer.from(JSON.parse(s).result.result).toString()))'
 ```
 
 (`eyJkZWFsX2lkIjowfQ==` is base64 of `{"deal_id":0}`.)
@@ -50,40 +57,40 @@ curl -s https://rpc.mainnet.fastnear.com -H 'content-type: application/json' -d 
 You see (excerpt):
 
 ```
-"id":0, "amount":"5000000", "funded_amount":"5000000", "state":"PaidOut",
-"creator_pk":"ed25519:Dhj4KC9K5fJffoziE8sHchGr5mybKKATekV9DSLULEyZ",
-"client_pk":"ed25519:2FjeBjgMEK4RqCAqdRT9wxz1JGU7UkaooUGKxQrLCrfC",
-"fee_bps":300, "fee_amount":"150000",
-"deliverable_hash":"sha256:31b97988bdabcc0dbcd0933db1e658403a572e10b091e230c7428572325bc38a",
-"terms_hash":"4ff65b1e733194b907283ead170be6a8d3b3d24e42ea197b6279f2405b2d4302",
-"outcome":"Accepted", "creator_withdrawn":"4850000", "client_withdrawn":"0",
-"creator_fingerprint":"49ba-d1a9-a852", "client_fingerprint":"03a2-cc31-c14c"
+"id":0, "amount":"1000000", "funded_amount":"1000000", "state":"PaidOut",
+"creator_pk":"ed25519:G3z9hD2kEsTH3i47tAHRtx8ZX6dVVxu8PYCRuPJEbwkZ",
+"client_pk":"ed25519:5wKxUEF7ytqVxsqESEwkR4jTqBNdrNTZrhntkmv4aJE6",
+"fee_bps":300, "fee_amount":"30000",
+"deliverable_hash":"v1:283d988bcf0d0f52e0849869f870af9bc99eeb833dd837ba8f99c43233d011b9",
+"terms_hash":"7c8c8e50d6b71483d9f2312036238983fe66022804dc5efb1188703c6f6d28cd",
+"outcome":"Accepted", "creator_withdrawn":"970000", "client_withdrawn":"0",
+"creator_fingerprint":"5a15-6212-2531", "client_fingerprint":"f8f9-a4dd-9768"
 ```
 
 What it shows: the deal knows its parties only as two one-time keys (no
 wallet addresses), the terms only as a salted hash, the delivered file only
-as a fingerprint. 5 USDC paid, 3% fee kept, 4.85 USDC paid out to the creator.
+as a fingerprint. 1 USDC paid, 3% fee kept, 0.97 USDC paid out to the creator.
 
 ### 4. Look at the payout transaction (1 min)
 
-Do: open https://nearblocks.io/txns/91pze9kVnWgXZNJnmQqx8T8F2xgt7jgBjnzUbcgSbXfJ
+Do: open https://nearblocks.io/txns/C6vcxwK8DeLe1u1zFngMRwFZnyNgf9fAhjTtu6DGW9Hi
 
 You see: method `act`, arguments
 
 ```
 {"deal_id":0,"action":"withdraw",
- "payload":"{\"destination\":\"a5a7c7b1dbcbf09960c20c73ae233ac884b5e4c55dcb54b9ab1b36d86dfb3b5f\",\"amount\":\"4850000\",\"expires_at_ns\":\"1794001268762000000\"}",
- "signature":"WaBe5tZX…kcfAA=="}
+ "payload":"{\"destination\":\"31719930dafb741b3537624ff61379efb07642c0b7500cf01834ec3fc9c8720c\",\"amount\":\"970000\",\"expires_at_ns\":\"1794619415014000000\"}",
+ "signature":"aUwEuKjG…"}
 ```
 
-and the logs `withdraw_started` → USDC `ft_transfer` of 4850000 from the
-escrow to `a5a7c7b1…` (a 1Click deposit address, which forwards to the
-creator's chosen chain) → `withdraw_done` with `state: PaidOut`. The
-destination is inside the signed payload: changing it breaks the creator's
-signature (step 5 re-verifies all 28 such signatures; attack 24 shows the
-contract refusing a redirect).
+and the logs `withdraw_started` → USDC `ft_transfer` of 970000 from the
+escrow to `31719930…` (a 1Click deposit address, which forwards to the
+creator's chosen chain) → `withdraw_done`. The destination is inside the
+signed payload: changing it breaks the creator's signature (step 5
+re-verifies every such signature; attack 24 shows the contract refusing a
+redirect).
 
-### 5. Run the proof script (2 min, no Rust needed)
+### 5. Run the proof script (1 min, no Rust needed)
 
 Do (from a clone of this repository, no `npm install`):
 
@@ -96,21 +103,22 @@ You see, about 10 s later:
 ```
 PASS  contract account exists on mainnet
 INFO  code hash vs local build                      (skipped: --build none)
-INFO  NEP-330 contract_source_metadata
-INFO  full-access keys present (1): expected on the TEST instance
+INFO  NEP-330 contract_source_metadata              (link to github.com/Basssoman/pinky @ 912cb4b)
+FAIL  full-access keys present (1)                  (the deploy key, until it is deleted; then: PASS no full-access keys)
 PASS  accepted token is NEAR-native USDC
-PASS  config: 8 deals, fee max 300 bps, ...
-PASS  deal transactions found on mainnet, succeeded, right contract/method/deal: 30/30
-PASS  relayed actions carry a valid deal-key signature (re-verified here with ed25519): 28/28
-PASS  deal outcomes on chain match the table: 7/7
-VERIFY_RESULT OK pass=6 info=3 fail=0 contract=9e537c21…c2c9c (TEST instance)
+PASS  config: 1 deals, fee max 300 bps, ...         (real periods: review >= 3 days, dispute 7 days)
+PASS  deal transactions found on mainnet, succeeded, right contract/method/deal: 5/5
+PASS  relayed actions carry a valid deal-key signature (re-verified here with ed25519): 4/4
+PASS  deal outcomes on chain match the table: 1/1
 ```
 
-With Rust installed, run the full version (attack suite + fresh contract
-build; the first run compiles for a few minutes):
+Exit code 0 means every check behaved as expected (after the key is deleted).
+
+With Rust installed, the attack suite runs too (the first run compiles for a
+few minutes):
 
 ```bash
-npm run verify
+npm run verify -- --build none
 ```
 
 You see 42 lines `REFUSED  ATTACK …` each followed by the contract's own
@@ -120,28 +128,57 @@ error, 16 lines `OK …`, then
 VERIFY_SANDBOX attacks_refused=42/42 honest_ok=16/16 failures=0
 PASS  sandbox attacks refused for the expected reason: 42/42
 PASS  sandbox honest paths OK: 16/16
-PASS  contract account exists on mainnet
-INFO  deployed code vs this repository's build: DIFFERENT (allowed for the TEST instance)
-INFO  NEP-330 contract_source_metadata
-INFO  full-access keys present (1): expected on the TEST instance
-PASS  accepted token is NEAR-native USDC
-PASS  config: 8 deals, fee max 300 bps, ...
-PASS  deal transactions found on mainnet, succeeded, right contract/method/deal: 30/30
-PASS  relayed actions carry a valid deal-key signature (re-verified here with ed25519): 28/28
-PASS  deal outcomes on chain match the table: 7/7
-VERIFY_RESULT OK pass=8 info=3 fail=0 contract=9e537c21…c2c9c (TEST instance)
 ```
 
-Exit code 0 means every check behaved as expected.
+followed by the mainnet lines of step 5.
+
+### 6. Rebuild the contract and compare it with the chain (5–10 min, Docker)
+
+The wasm carries the commit it was built from, so check out exactly that
+commit first:
+
+```bash
+git checkout 912cb4b
+cd contract && cargo near build reproducible-wasm
+sha256sum target/near/escrow.wasm
+```
+
+You see `6b5193ae00325d2261a068413649eda9c4e74f368713fb5f04da8835555b9649`.
+The contract's `code_hash` on chain is `8DvmhWF9M5B1dJbXkCRYQive2AJyKKAnJSk3w5uojYqW`:
+the same 32 bytes written in base58. So the chain runs exactly the code of
+this repository. (`npm run verify` from a newer commit tells you this and
+prints the same commands.)
 
 ## Real mainnet deals
 
-TEST instance `9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c`
-(short timers). Real USDC; the clients paid from other chains through 1Click.
-Funding arrives as receipts from the USDC token (`ft_transfer_call`), so it is
-not a transaction to the escrow; `funded_amount` in `get_deal` shows it.
+### On the final contract `escrow.pinkydeals.near`
+
+Real USDC; the client paid from another chain through 1Click. Funding
+arrives as a receipt from the USDC token (`ft_transfer_call`), so it is not a
+transaction to the escrow; `funded_amount` in `get_deal` shows it.
 Machine-readable list: [verify/mainnet-txs.json](verify/mainnet-txs.json)
 (checked by `npm run verify`).
+
+| Deal | Amount | Outcome | Transactions (nearblocks) |
+|---|---|---|---|
+| 0 | 1 USDC | accepted, creator paid 0.97 (through the site) | [join](https://nearblocks.io/txns/DiTcN7zkVAVp9ptahSxNyGKkF3JKRsfjWd7SHY4sWRt) · [deliver](https://nearblocks.io/txns/6VZr6gs6KEuf46qYRzfdTB1WXoF78YjVsxM5u38fbEWA) · [accept](https://nearblocks.io/txns/4u3FXfnftBUU5NJ9bj1z4MXRtE68TjXXtftqNPmrDieH) · [withdraw](https://nearblocks.io/txns/C6vcxwK8DeLe1u1zFngMRwFZnyNgf9fAhjTtu6DGW9Hi) |
+
+Contract deploy + init (one transaction, `new` is private):
+[4osoXnj9…](https://nearblocks.io/txns/4osoXnj9UMbs9XzEz5FPLmUu2Vgy3SaqPASw7nxzJBCe).
+
+### Earlier deals on the TEST instance
+
+TEST instance `9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c`
+(short timers: review 5 min, dispute 15 min, pay-by 3 h), deleted on
+2026-11-14. The explorer links still work; to re-check them from an archival
+node (the last block before the deletion):
+
+```bash
+npm run verify:mainnet -- --build none --contract 9e537c21716b2035d7c88f153f0283e8dda925af16bbb6cf6ea23256436c2c9c
+```
+
+You see `PASS … 30/30` transactions, `PASS … 28/28` signatures, `PASS … 7/7`
+outcomes.
 
 | Deal | Amount | Outcome | Transactions (nearblocks) |
 |---|---|---|---|
@@ -151,16 +188,12 @@ Machine-readable list: [verify/mainnet-txs.json](verify/mainnet-txs.json)
 | 3 | 2 USDC | creator refunded the client | [join](https://nearblocks.io/txns/9zuGLNsPKsytngjhAFJjBNExeNvPkTVnfaBsbqi7MdGv) · [refund](https://nearblocks.io/txns/hnXhmaYFNvFnje9Sbi8mtDcfmvhbNxdmzQDEjme423Y) · [withdraw](https://nearblocks.io/txns/AqH62jXgVgukm3YRUtesWYDVGTTgysXF4pciRqq86VRK) |
 | 4 | 2 USDC | accepted (through the site) | [join](https://nearblocks.io/txns/tRtmVHwvary2sGKr1Di7qcWpTrLJsMHYSXvVmGTQkgz) · [deliver](https://nearblocks.io/txns/5PfphXYbDrzthn4ziTwKmn2vaQu5Wkbt8oB6fPjkfssd) · [accept](https://nearblocks.io/txns/612hhRywQtvzzZGotdXZYaLduu7Nw2ptH3cJLozrPxz2) · [withdraw](https://nearblocks.io/txns/DrqCUbE53Gq5XBDfeoDW5vKckcCzugzaAm99smfYrHUS) |
 | 5 | 5 USDC | accepted (through the site) | [join](https://nearblocks.io/txns/3wpLkbCds9PwJ2MNotkudjDDWjtQfysmnU5htg8fCQb1) · [deliver](https://nearblocks.io/txns/DhKAfZJEy68f4uqdUfru17tv8bNj6THJ6aDW11wLtTzg) · [accept](https://nearblocks.io/txns/CJKY65mTsPveJ6xf9DJcmiPDvPLxY544EJDu4k9po5PL) · [withdraw](https://nearblocks.io/txns/C2vduSdnrmZW8EAGLH3LAg8W4P7EJ16kKuvC78sBxs6S) |
-| 6 | 5 USDC | joined, never paid (expires; anyone can close it) | [join](https://nearblocks.io/txns/8FoBjEfu7oVUtnu2qPSjS4CPzsyfXewq2pR4aqh7oRUN) |
+| 6 | 5 USDC | joined, never paid | [join](https://nearblocks.io/txns/8FoBjEfu7oVUtnu2qPSjS4CPzsyfXewq2pR4aqh7oRUN) |
 | 7 | 1 USDC | creator refunded the client (through the site) | [join](https://nearblocks.io/txns/CeSv4gW5xVtmU3eTpkZkM2P1sDmEp4WGPdgtNCPRqsG2) · [refund](https://nearblocks.io/txns/FxFT4NfNpsDWioCwTh4qjQEhCfZvRxQQaK49H2SkZMUC) · [withdraw](https://nearblocks.io/txns/7r1GTr3zJ15k6LJ3p2iYTb1MnneSnkXgaNhoyKeJxuVQ) |
 
-Contract deploy + init (one transaction, `new` is private):
-[3xDGzqVn…](https://nearblocks.io/txns/3xDGzqVnEHSeeJyJ2QTdDBuvCb4rR789Goyxp5x9pPAj).
+TEST deploy + init: [3xDGzqVn…](https://nearblocks.io/txns/3xDGzqVnEHSeeJyJ2QTdDBuvCb4rR789Goyxp5x9pPAj).
 Deals 0–3 were driven by our live kit on 2026-11-06, deals 4–7 through the
 site on 2026-11-11. On the TEST instance the arbiter is the team (deal 1).
-
-Final contract: `FINAL_CONTRACT_ID` — deal table FINAL_DEALS_TABLE (to be
-filled after the 2026-11-14 deploy).
 
 ## What `npm run verify` checks
 
@@ -168,7 +201,7 @@ Runner: [verify/verify.mjs](verify/verify.mjs). Root `package.json` scripts:
 `verify` (all), `verify:sandbox` (Part A only), `verify:mainnet` (Part B only).
 
 ```bash
-npm run verify -- --contract <account>            # check another deployment (e.g. the final one)
+npm run verify -- --contract <account>            # check another deployment (default: escrow.pinkydeals.near)
 npm run verify -- --build reproducible            # NEP-330 reproducible build in docker
 npm run verify -- --wasm path/to/escrow.wasm      # compare a wasm you built yourself
 ```
@@ -234,24 +267,20 @@ timeout split, and at the end: escrow token balance = total liabilities.
 The other contract tests still run separately: `cargo test --lib` (unit,
 every transition) and `cargo test --test sandbox`.
 
+
 ### Part B — read-only mainnet
 
-| Check | PASS means | On the TEST instance |
+| Check | PASS means | Today on `escrow.pinkydeals.near` |
 |---|---|---|
 | contract account exists | `view_account` answers | PASS |
-| code hash vs local build | sha256 of a **fresh** local build (base58) = the account's `code_hash`: the chain runs exactly this repository's code | INFO, differs: deployed 2026-11-06; since then `contract/Cargo.toml` got a new repository link, which cargo-near bakes into the wasm (NEP-330). Required to PASS for the final contract, built with `--build reproducible` |
-| full-access keys | 0 full-access keys: nobody can redeploy the code or use the account | INFO, 1 key (test instance). Required to be 0 for the final contract |
+| code hash vs local build | sha256 of a **fresh** local build (base58) = the account's `code_hash`: the chain runs exactly this repository's code | PASS with `--build reproducible` from a checkout of `912cb4b` (step 6). From another commit the script says so and prints the commands instead of comparing |
+| full-access keys | 0 full-access keys: nobody can redeploy the code or use the account | **FAIL, 1 key** (the deploy key) until it is deleted |
 | token | `token_id` = NEAR-native USDC `17208628…6133a1` | PASS |
-| transactions | every tx in `verify/mainnet-txs.json` exists (archival RPC), succeeded, called this contract with the listed method / deal / action | PASS 30/30 |
-| signatures | each `create_deal` carries a valid creator offer signature, each `act` a valid creator or client key signature over `escrow-v1|{contract}|{deal}|{action}|{payload}`, each `settle` both | PASS 28/28 |
-| outcomes | `get_deal(id).outcome` = the table | PASS 7/7 |
+| config | real periods on the final contract | PASS |
+| transactions | every tx in `verify/mainnet-txs.json` exists (archival RPC), succeeded, called this contract with the listed method / deal / action | PASS 5/5 |
+| signatures | each `create_deal` carries a valid creator offer signature, each `act` a valid creator or client key signature over `escrow-v1|{contract}|{deal}|{action}|{payload}`, each `settle` both | PASS 4/4 |
+| outcomes | `get_deal(id).outcome` = the table | PASS 1/1 |
 
-## How to check the final contract (after 2026-11-14)
-
-```bash
-npm run verify -- --contract FINAL_CONTRACT_ID --build reproducible
-```
-
-Expected: `PASS deployed code = this repository's build (sha256 matches)`,
-`PASS no full-access keys`, real timers in the config line, exit code 0.
-`FINAL_CODE_HASH` will be listed here.
+For the deleted TEST instance (`--contract 9e537c21…`) only the history is
+checked, from an archival node at the last block before the deletion:
+transactions 30/30, signatures 28/28, outcomes 7/7.

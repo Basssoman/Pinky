@@ -2,6 +2,7 @@
   "name": "private-escrow-server",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "API + relayer for the private creator escrow (NEAR + 1Click Intents)",
   "type": "module",
   "engines": {
